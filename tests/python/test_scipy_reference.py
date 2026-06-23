@@ -22,7 +22,7 @@ def test_rosenbrock_matches_scipy_bfgs_reference() -> None:
         method="adam",
         learning_rate=2e-2,
         max_iter=30_000,
-        gradient_tolerance=1e-3,
+        gradient_tolerance=1e-6,
         step_tolerance=0.0,
         function_tolerance=0.0,
         log_trajectory=False,
