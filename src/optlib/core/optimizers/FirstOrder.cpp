@@ -78,12 +78,25 @@ OptimizeResult MinimizeFirstOrder(const ValueFunction& valueFunction,
     Vector secondMoment(dimension);
     Vector accumulator(dimension);
     Vector delta(dimension);
+    OptimizeResult result;
+    LearningRateConfig learningRateConfig{
+        .Schedule = config.Schedule,
+        .InitialLearningRate = config.LearningRate,
+        .Gamma = config.LearningRateGamma,
+        .StepSize = config.LearningRateStepSize,
+        .DecayRate = config.LearningRateDecay,
+        .MinimumLearningRate = config.MinimumLearningRate,
+        .TotalIterations = config.ScheduleIterations == 0 ? config.Criteria.MaxIterations
+                                                          : config.ScheduleIterations,
+        .WarmupSteps = config.WarmupSteps,
+    };
 
     auto currentValue = valueFunction(current.Span());
+    ++result.FunctionEvaluations;
     gradientFunction(current.Span(), gradient.Span());
+    ++result.GradientEvaluations;
     auto gradientNorm = Norm2(gradient);
 
-    OptimizeResult result;
     result.Path = Trajectory(dimension);
     if (config.StoreTrajectory) {
         result.Path.Reserve(config.Criteria.MaxIterations + 1);
@@ -99,16 +112,17 @@ OptimizeResult MinimizeFirstOrder(const ValueFunction& valueFunction,
     }
 
     for (std::size_t iteration = 1; iteration <= config.Criteria.MaxIterations; ++iteration) {
+        const auto learningRate = LearningRateAt(iteration - 1, learningRateConfig);
         switch (method) {
         case FirstOrderMethod::GradientDescent:
             for (std::size_t index = 0; index < dimension; ++index) {
-                next[index] = current[index] - config.LearningRate * gradient[index];
+                next[index] = current[index] - learningRate * gradient[index];
             }
             break;
         case FirstOrderMethod::HeavyBall:
             for (std::size_t index = 0; index < dimension; ++index) {
                 velocity[index] =
-                    config.Momentum * velocity[index] - config.LearningRate * gradient[index];
+                    config.Momentum * velocity[index] - learningRate * gradient[index];
                 next[index] = current[index] + velocity[index];
             }
             break;
@@ -117,9 +131,10 @@ OptimizeResult MinimizeFirstOrder(const ValueFunction& valueFunction,
                 lookahead[index] = current[index] + config.Momentum * velocity[index];
             }
             gradientFunction(lookahead.Span(), nextGradient.Span());
+            ++result.GradientEvaluations;
             for (std::size_t index = 0; index < dimension; ++index) {
                 velocity[index] =
-                    config.Momentum * velocity[index] - config.LearningRate * nextGradient[index];
+                    config.Momentum * velocity[index] - learningRate * nextGradient[index];
                 next[index] = current[index] + velocity[index];
             }
             break;
@@ -135,8 +150,7 @@ OptimizeResult MinimizeFirstOrder(const ValueFunction& valueFunction,
                 auto correctedFirst = firstMoment[index] / firstCorrection;
                 auto correctedSecond = secondMoment[index] / secondCorrection;
                 next[index] = current[index]
-                    - config.LearningRate * correctedFirst
-                        / (std::sqrt(correctedSecond) + config.Epsilon);
+                    - learningRate * correctedFirst / (std::sqrt(correctedSecond) + config.Epsilon);
             }
             break;
         case FirstOrderMethod::RMSProp:
@@ -144,22 +158,22 @@ OptimizeResult MinimizeFirstOrder(const ValueFunction& valueFunction,
                 secondMoment[index] = config.Beta2 * secondMoment[index]
                     + (1.0 - config.Beta2) * gradient[index] * gradient[index];
                 next[index] = current[index]
-                    - config.LearningRate * gradient[index]
-                        / (std::sqrt(secondMoment[index]) + config.Epsilon);
+                    - learningRate * gradient[index] / (std::sqrt(secondMoment[index]) + config.Epsilon);
             }
             break;
         case FirstOrderMethod::Adagrad:
             for (std::size_t index = 0; index < dimension; ++index) {
                 accumulator[index] += gradient[index] * gradient[index];
                 next[index] = current[index]
-                    - config.LearningRate * gradient[index]
-                        / (std::sqrt(accumulator[index]) + config.Epsilon);
+                    - learningRate * gradient[index] / (std::sqrt(accumulator[index]) + config.Epsilon);
             }
             break;
         }
 
         auto nextValue = valueFunction(next.Span());
+        ++result.FunctionEvaluations;
         gradientFunction(next.Span(), nextGradient.Span());
+        ++result.GradientEvaluations;
         auto nextGradientNorm = Norm2(nextGradient);
         Subtract(next.Span(), current.Span(), delta.Span());
         auto stepNorm = Norm2(delta);

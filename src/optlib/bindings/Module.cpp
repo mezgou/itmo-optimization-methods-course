@@ -7,6 +7,8 @@
 #include <optlib/core/Version.hpp>
 #include <optlib/core/functions/Rosenbrock.hpp>
 #include <optlib/core/optimizers/FirstOrder.hpp>
+#include <optlib/core/optimizers/SecondOrder.hpp>
+#include <optlib/core/optimizers/ZeroOrder.hpp>
 
 #include <cstddef>
 #include <span>
@@ -108,7 +110,14 @@ optlib::FirstOrderConfig MakeFirstOrderConfig(double learningRate,
                                               double beta1,
                                               double beta2,
                                               double epsilon,
-                                              bool logTrajectory)
+                                              bool logTrajectory,
+                                              const std::string& schedule,
+                                              double learningRateGamma,
+                                              std::size_t learningRateStepSize,
+                                              double learningRateDecay,
+                                              double minimumLearningRate,
+                                              std::size_t warmupSteps,
+                                              std::size_t scheduleIterations)
 {
     optlib::FirstOrderConfig config;
     config.LearningRate = learningRate;
@@ -117,11 +126,84 @@ optlib::FirstOrderConfig MakeFirstOrderConfig(double learningRate,
     config.Beta2 = beta2;
     config.Epsilon = epsilon;
     config.StoreTrajectory = logTrajectory;
+    config.Schedule = optlib::ParseLearningRateSchedule(schedule);
+    config.LearningRateGamma = learningRateGamma;
+    config.LearningRateStepSize = learningRateStepSize;
+    config.LearningRateDecay = learningRateDecay;
+    config.MinimumLearningRate = minimumLearningRate;
+    config.WarmupSteps = warmupSteps;
+    config.ScheduleIterations = scheduleIterations;
     config.Criteria.MaxIterations = maxIter;
     config.Criteria.GradientTolerance = gradientTolerance;
     config.Criteria.StepTolerance = stepTolerance;
     config.Criteria.FunctionTolerance = functionTolerance;
     return config;
+}
+
+optlib::SecondOrderConfig MakeSecondOrderConfig(std::size_t maxIter,
+                                                double gradientTolerance,
+                                                double stepTolerance,
+                                                double functionTolerance,
+                                                std::size_t historySize,
+                                                double hessianDamping,
+                                                const std::string& lineSearch,
+                                                double lineSearchInitialStep,
+                                                double lineSearchReduction,
+                                                bool logTrajectory)
+{
+    optlib::SecondOrderConfig config;
+    config.Criteria.MaxIterations = maxIter;
+    config.Criteria.GradientTolerance = gradientTolerance;
+    config.Criteria.StepTolerance = stepTolerance;
+    config.Criteria.FunctionTolerance = functionTolerance;
+    config.HistorySize = historySize;
+    config.HessianDamping = hessianDamping;
+    config.Search.Method = optlib::ParseLineSearchMethod(lineSearch);
+    config.Search.InitialStep = lineSearchInitialStep;
+    config.Search.Reduction = lineSearchReduction;
+    config.StoreTrajectory = logTrajectory;
+    return config;
+}
+
+optlib::ZeroOrderConfig MakeZeroOrderConfig(std::size_t maxIter,
+                                            double stepTolerance,
+                                            double functionTolerance,
+                                            double initialStep,
+                                            double lineSearchRadius,
+                                            double lineSearchTolerance,
+                                            bool logTrajectory)
+{
+    optlib::ZeroOrderConfig config;
+    config.Criteria.MaxIterations = maxIter;
+    config.Criteria.StepTolerance = stepTolerance;
+    config.Criteria.FunctionTolerance = functionTolerance;
+    config.InitialStep = initialStep;
+    config.LineSearchRadius = lineSearchRadius;
+    config.LineSearchTolerance = lineSearchTolerance;
+    config.StoreTrajectory = logTrajectory;
+    return config;
+}
+
+double LearningRateAtBinding(std::size_t iteration,
+                             const std::string& schedule,
+                             double initialLearningRate,
+                             double gamma,
+                             std::size_t stepSize,
+                             double decayRate,
+                             double minimumLearningRate,
+                             std::size_t totalIterations,
+                             std::size_t warmupSteps)
+{
+    optlib::LearningRateConfig config;
+    config.Schedule = optlib::ParseLearningRateSchedule(schedule);
+    config.InitialLearningRate = initialLearningRate;
+    config.Gamma = gamma;
+    config.StepSize = stepSize;
+    config.DecayRate = decayRate;
+    config.MinimumLearningRate = minimumLearningRate;
+    config.TotalIterations = totalIterations;
+    config.WarmupSteps = warmupSteps;
+    return optlib::LearningRateAt(iteration, config);
 }
 
 py::dict TrajectoryToDict(const optlib::Trajectory& path)
@@ -141,6 +223,9 @@ py::dict OptimizeResultToDict(optlib::OptimizeResult result)
     output["value"] = result.Value;
     output["gradient_norm"] = result.GradientNorm;
     output["iterations"] = result.Iterations;
+    output["function_evaluations"] = result.FunctionEvaluations;
+    output["gradient_evaluations"] = result.GradientEvaluations;
+    output["hessian_evaluations"] = result.HessianEvaluations;
     output["converged"] = result.Converged;
     output["trajectory"] = TrajectoryToDict(result.Path);
     return output;
@@ -218,7 +303,14 @@ py::dict MinimizeRosenbrockBinding(const Array& x0,
                                    double beta1,
                                    double beta2,
                                    double epsilon,
-                                   bool logTrajectory)
+                                   bool logTrajectory,
+                                   const std::string& schedule,
+                                   double learningRateGamma,
+                                   std::size_t learningRateStepSize,
+                                   double learningRateDecay,
+                                   double minimumLearningRate,
+                                   std::size_t warmupSteps,
+                                   std::size_t scheduleIterations)
 {
     auto xValue = VectorFromArray(x0);
     auto config = MakeFirstOrderConfig(learningRate,
@@ -230,7 +322,14 @@ py::dict MinimizeRosenbrockBinding(const Array& x0,
                                        beta1,
                                        beta2,
                                        epsilon,
-                                       logTrajectory);
+                                       logTrajectory,
+                                       schedule,
+                                       learningRateGamma,
+                                       learningRateStepSize,
+                                       learningRateDecay,
+                                       minimumLearningRate,
+                                       warmupSteps,
+                                       scheduleIterations);
     optlib::OptimizeResult result;
     {
         py::gil_scoped_release release;
@@ -253,7 +352,14 @@ py::dict MinimizeBinding(const py::function& valueFunction,
                          double beta1,
                          double beta2,
                          double epsilon,
-                         bool logTrajectory)
+                         bool logTrajectory,
+                         const std::string& schedule,
+                         double learningRateGamma,
+                         std::size_t learningRateStepSize,
+                         double learningRateDecay,
+                         double minimumLearningRate,
+                         std::size_t warmupSteps,
+                         std::size_t scheduleIterations)
 {
     auto xValue = VectorFromArray(x0);
     auto config = MakeFirstOrderConfig(learningRate,
@@ -265,7 +371,14 @@ py::dict MinimizeBinding(const py::function& valueFunction,
                                        beta1,
                                        beta2,
                                        epsilon,
-                                       logTrajectory);
+                                       logTrajectory,
+                                       schedule,
+                                       learningRateGamma,
+                                       learningRateStepSize,
+                                       learningRateDecay,
+                                       minimumLearningRate,
+                                       warmupSteps,
+                                       scheduleIterations);
     auto wrappedValueFunction = [&valueFunction](std::span<const double> values) {
         py::gil_scoped_acquire acquire;
         return valueFunction(PointArray(values)).cast<double>();
@@ -293,6 +406,169 @@ py::dict MinimizeBinding(const py::function& valueFunction,
     return OptimizeResultToDict(std::move(result));
 }
 
+py::dict MinimizeRosenbrockSecondOrderBinding(const Array& x0,
+                                              const std::string& method,
+                                              std::size_t maxIter,
+                                              double gradientTolerance,
+                                              double stepTolerance,
+                                              double functionTolerance,
+                                              std::size_t historySize,
+                                              double hessianDamping,
+                                              const std::string& lineSearch,
+                                              double lineSearchInitialStep,
+                                              double lineSearchReduction,
+                                              bool logTrajectory)
+{
+    auto xValue = VectorFromArray(x0);
+    auto config = MakeSecondOrderConfig(maxIter,
+                                        gradientTolerance,
+                                        stepTolerance,
+                                        functionTolerance,
+                                        historySize,
+                                        hessianDamping,
+                                        lineSearch,
+                                        lineSearchInitialStep,
+                                        lineSearchReduction,
+                                        logTrajectory);
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeRosenbrockSecondOrder(
+            xValue.Span(), optlib::ParseSecondOrderMethod(method), config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
+py::dict MinimizeSecondOrderBinding(const py::function& valueFunction,
+                                    const py::function& gradientFunction,
+                                    const Array& x0,
+                                    const std::string& method,
+                                    std::size_t maxIter,
+                                    double gradientTolerance,
+                                    double stepTolerance,
+                                    double functionTolerance,
+                                    std::size_t historySize,
+                                    double hessianDamping,
+                                    const std::string& lineSearch,
+                                    double lineSearchInitialStep,
+                                    double lineSearchReduction,
+                                    const py::object& hessianFunction,
+                                    bool logTrajectory)
+{
+    auto xValue = VectorFromArray(x0);
+    auto config = MakeSecondOrderConfig(maxIter,
+                                        gradientTolerance,
+                                        stepTolerance,
+                                        functionTolerance,
+                                        historySize,
+                                        hessianDamping,
+                                        lineSearch,
+                                        lineSearchInitialStep,
+                                        lineSearchReduction,
+                                        logTrajectory);
+    auto wrappedValueFunction = [&valueFunction](std::span<const double> values) {
+        py::gil_scoped_acquire acquire;
+        return valueFunction(PointArray(values)).cast<double>();
+    };
+    auto wrappedGradientFunction = [&gradientFunction](std::span<const double> values,
+                                                       std::span<double> gradient) {
+        py::gil_scoped_acquire acquire;
+        auto gradientArray = gradientFunction(PointArray(values)).cast<Array>();
+        auto gradientSpan = VectorSpan(gradientArray);
+        if (gradientSpan.size() != gradient.size()) {
+            throw std::invalid_argument("Python gradient returned an unexpected shape");
+        }
+        optlib::Copy(gradientSpan, gradient);
+    };
+
+    optlib::HessianFunction wrappedHessianFunction;
+    if (!hessianFunction.is_none()) {
+        py::function hessianCallable = hessianFunction.cast<py::function>();
+        wrappedHessianFunction = [hessianCallable](std::span<const double> values,
+                                                   optlib::Matrix& hessian) {
+            py::gil_scoped_acquire acquire;
+            auto hessianArray = hessianCallable(PointArray(values)).cast<Array>();
+            hessian = MatrixFromArray(hessianArray);
+        };
+    }
+
+    auto parsedMethod = optlib::ParseSecondOrderMethod(method);
+    if (parsedMethod == optlib::SecondOrderMethod::Newton && !wrappedHessianFunction) {
+        throw std::invalid_argument("Newton requires a Hessian callable");
+    }
+
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeSecondOrder(wrappedValueFunction,
+                                             wrappedGradientFunction,
+                                             wrappedHessianFunction,
+                                             xValue.Span(),
+                                             parsedMethod,
+                                             config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
+py::dict MinimizeRosenbrockZeroOrderBinding(const Array& x0,
+                                            const std::string& method,
+                                            std::size_t maxIter,
+                                            double stepTolerance,
+                                            double functionTolerance,
+                                            double initialStep,
+                                            double lineSearchRadius,
+                                            double lineSearchTolerance,
+                                            bool logTrajectory)
+{
+    auto xValue = VectorFromArray(x0);
+    auto config = MakeZeroOrderConfig(maxIter,
+                                      stepTolerance,
+                                      functionTolerance,
+                                      initialStep,
+                                      lineSearchRadius,
+                                      lineSearchTolerance,
+                                      logTrajectory);
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeRosenbrockZeroOrder(
+            xValue.Span(), optlib::ParseZeroOrderMethod(method), config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
+py::dict MinimizeZeroOrderBinding(const py::function& valueFunction,
+                                  const Array& x0,
+                                  const std::string& method,
+                                  std::size_t maxIter,
+                                  double stepTolerance,
+                                  double functionTolerance,
+                                  double initialStep,
+                                  double lineSearchRadius,
+                                  double lineSearchTolerance,
+                                  bool logTrajectory)
+{
+    auto xValue = VectorFromArray(x0);
+    auto config = MakeZeroOrderConfig(maxIter,
+                                      stepTolerance,
+                                      functionTolerance,
+                                      initialStep,
+                                      lineSearchRadius,
+                                      lineSearchTolerance,
+                                      logTrajectory);
+    auto wrappedValueFunction = [&valueFunction](std::span<const double> values) {
+        py::gil_scoped_acquire acquire;
+        return valueFunction(PointArray(values)).cast<double>();
+    };
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeZeroOrder(
+            wrappedValueFunction, xValue.Span(), optlib::ParseZeroOrderMethod(method), config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
 } // namespace
 
 PYBIND11_MODULE(_optlib, moduleHandle)
@@ -313,9 +589,35 @@ PYBIND11_MODULE(_optlib, moduleHandle)
         .value("RMSProp", optlib::FirstOrderMethod::RMSProp)
         .value("Adagrad", optlib::FirstOrderMethod::Adagrad)
         .export_values();
+    py::enum_<optlib::LearningRateSchedule>(moduleHandle, "LearningRateSchedule")
+        .value("Constant", optlib::LearningRateSchedule::Constant)
+        .value("Step", optlib::LearningRateSchedule::Step)
+        .value("Exponential", optlib::LearningRateSchedule::Exponential)
+        .value("Cosine", optlib::LearningRateSchedule::Cosine)
+        .export_values();
+    py::enum_<optlib::LineSearchMethod>(moduleHandle, "LineSearchMethod")
+        .value("Armijo", optlib::LineSearchMethod::Armijo)
+        .value("StrongWolfe", optlib::LineSearchMethod::StrongWolfe)
+        .export_values();
+    py::enum_<optlib::SecondOrderMethod>(moduleHandle, "SecondOrderMethod")
+        .value("Newton", optlib::SecondOrderMethod::Newton)
+        .value("BFGS", optlib::SecondOrderMethod::BFGS)
+        .value("LBFGS", optlib::SecondOrderMethod::LBFGS)
+        .export_values();
+    py::enum_<optlib::ZeroOrderMethod>(moduleHandle, "ZeroOrderMethod")
+        .value("NelderMead", optlib::ZeroOrderMethod::NelderMead)
+        .value("Powell", optlib::ZeroOrderMethod::Powell)
+        .value("CoordinateSearch", optlib::ZeroOrderMethod::CoordinateSearch)
+        .export_values();
 
     moduleHandle.def("Version", []() { return std::string(optlib::Version()); });
     moduleHandle.def("Add", &optlib::Add, py::arg("left_value"), py::arg("right_value"));
+    moduleHandle.def("LearningRateAt", &LearningRateAtBinding, py::arg("iteration"),
+                     py::arg("schedule") = "constant", py::arg("initial_learning_rate") = 1e-3,
+                     py::arg("gamma") = 0.5, py::arg("step_size") = 100,
+                     py::arg("decay_rate") = 1e-3,
+                     py::arg("minimum_learning_rate") = 0.0,
+                     py::arg("total_iterations") = 1000, py::arg("warmup_steps") = 0);
     moduleHandle.def(
         "Dot",
         [](const Array& left, const Array& right) {
@@ -430,7 +732,12 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("step_tolerance") = 1e-12,
                      py::arg("function_tolerance") = 1e-12, py::arg("momentum") = 0.9,
                      py::arg("beta1") = 0.9, py::arg("beta2") = 0.999,
-                     py::arg("epsilon") = 1e-8, py::arg("log_trajectory") = true);
+                     py::arg("epsilon") = 1e-8, py::arg("log_trajectory") = true,
+                     py::arg("schedule") = "constant", py::arg("learning_rate_gamma") = 0.5,
+                     py::arg("learning_rate_step_size") = 100,
+                     py::arg("learning_rate_decay") = 1e-3,
+                     py::arg("minimum_learning_rate") = 0.0, py::arg("warmup_steps") = 0,
+                     py::arg("schedule_iterations") = 0);
     moduleHandle.def("Minimize", &MinimizeBinding, py::arg("value_function"),
                      py::arg("gradient_function"), py::arg("x0"), py::arg("method") = "adam",
                      py::arg("learning_rate") = 1e-3, py::arg("max_iter") = 10000,
@@ -438,5 +745,47 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("step_tolerance") = 1e-12,
                      py::arg("function_tolerance") = 1e-12, py::arg("momentum") = 0.9,
                      py::arg("beta1") = 0.9, py::arg("beta2") = 0.999,
-                     py::arg("epsilon") = 1e-8, py::arg("log_trajectory") = true);
+                     py::arg("epsilon") = 1e-8, py::arg("log_trajectory") = true,
+                     py::arg("schedule") = "constant", py::arg("learning_rate_gamma") = 0.5,
+                     py::arg("learning_rate_step_size") = 100,
+                     py::arg("learning_rate_decay") = 1e-3,
+                     py::arg("minimum_learning_rate") = 0.0, py::arg("warmup_steps") = 0,
+                     py::arg("schedule_iterations") = 0);
+    moduleHandle.def("MinimizeRosenbrockSecondOrder", &MinimizeRosenbrockSecondOrderBinding,
+                     py::arg("x0"), py::arg("method") = "bfgs", py::arg("max_iter") = 1000,
+                     py::arg("gradient_tolerance") = 1e-6,
+                     py::arg("step_tolerance") = 1e-12,
+                     py::arg("function_tolerance") = 1e-12, py::arg("history_size") = 10,
+                     py::arg("hessian_damping") = 1e-6,
+                     py::arg("line_search") = "strong_wolfe",
+                     py::arg("line_search_initial_step") = 1.0,
+                     py::arg("line_search_reduction") = 0.5,
+                     py::arg("log_trajectory") = true);
+    moduleHandle.def("MinimizeSecondOrder", &MinimizeSecondOrderBinding,
+                     py::arg("value_function"), py::arg("gradient_function"),
+                     py::arg("x0"), py::arg("method") = "lbfgs",
+                     py::arg("max_iter") = 1000,
+                     py::arg("gradient_tolerance") = 1e-6,
+                     py::arg("step_tolerance") = 1e-12,
+                     py::arg("function_tolerance") = 1e-12, py::arg("history_size") = 10,
+                     py::arg("hessian_damping") = 1e-6,
+                     py::arg("line_search") = "strong_wolfe",
+                     py::arg("line_search_initial_step") = 1.0,
+                     py::arg("line_search_reduction") = 0.5,
+                     py::arg("hessian_function") = py::none(),
+                     py::arg("log_trajectory") = true);
+    moduleHandle.def("MinimizeRosenbrockZeroOrder", &MinimizeRosenbrockZeroOrderBinding,
+                     py::arg("x0"), py::arg("method") = "nelder_mead",
+                     py::arg("max_iter") = 2000, py::arg("step_tolerance") = 1e-8,
+                     py::arg("function_tolerance") = 1e-10, py::arg("initial_step") = 1.0,
+                     py::arg("line_search_radius") = 1.0,
+                     py::arg("line_search_tolerance") = 1e-6,
+                     py::arg("log_trajectory") = true);
+    moduleHandle.def("MinimizeZeroOrder", &MinimizeZeroOrderBinding, py::arg("value_function"),
+                     py::arg("x0"), py::arg("method") = "nelder_mead",
+                     py::arg("max_iter") = 2000, py::arg("step_tolerance") = 1e-8,
+                     py::arg("function_tolerance") = 1e-10, py::arg("initial_step") = 1.0,
+                     py::arg("line_search_radius") = 1.0,
+                     py::arg("line_search_tolerance") = 1e-6,
+                     py::arg("log_trajectory") = true);
 }

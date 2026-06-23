@@ -69,6 +69,9 @@ struct OptimizeResult {
     double Value = 0.0;
     double GradientNorm = 0.0;
     std::size_t Iterations = 0;
+    std::size_t FunctionEvaluations = 0;
+    std::size_t GradientEvaluations = 0;
+    std::size_t HessianEvaluations = 0;
     bool Converged = false;
     Trajectory Path;
 };
