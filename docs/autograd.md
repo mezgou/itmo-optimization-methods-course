@@ -7,21 +7,18 @@
 
 Для переменной `x_i` создается dual-число:
 
-$$
-\operatorname{value}=x_i,\qquad
-\operatorname{gradient}_j =
-\begin{cases}
-1,& i=j,\\
-0,& i\ne j
-\end{cases}
-$$
+```text
+value = x_i
+gradient[j] = 1, если i == j
+gradient[j] = 0, если i != j
+```
 
 Дальше перегруженные операции распространяют производные по правилам
 дифференцирования. Например, для произведения:
 
-$$
-(uv)'=u'v+uv'
-$$
+```text
+(u * v)' = u' * v + u * v'
+```
 
 Для функций `sin`, `cos`, `exp`, `log`, `sqrt`, `pow` применяются обычные
 цепные правила.
