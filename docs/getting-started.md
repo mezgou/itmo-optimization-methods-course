@@ -32,6 +32,14 @@ cmake --build build
 ctest --test-dir build
 ```
 
+Для запуска ноутбуков и сравнений со SciPy установите экспериментальные
+зависимости:
+
+```powershell
+uv sync --extra experiments --extra dev
+uv run jupyter notebook notebooks/first_lab.ipynb
+```
+
 ## Текущая структура
 
 - `src/optlib/` — C++23-ядро и pybind11-биндинги.
@@ -39,6 +47,8 @@ ctest --test-dir build
 - `tests/cpp/` — GoogleTest-тесты, запускаемые через CTest.
 - `tests/python/` — pytest-тесты публичного Python API.
 - `extends/pybind11` и `extends/googletest` — git submodule-зависимости.
+- `notebooks/first_lab.ipynb` — воспроизводимый отчет первой лабораторной.
+- `docs/` — русскоязычная документация по темам, а не по номерам лабораторных.
 
 ## Проверенные источники для сборки
 
