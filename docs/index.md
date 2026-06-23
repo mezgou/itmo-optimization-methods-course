@@ -15,6 +15,7 @@
 - [Оптимизаторы](optimizers.md) — методы первого порядка и траектории.
 - [Бенчмарки](benchmarks.md) — воспроизводимые измерения и внешние эталоны.
 - [Нейронная сеть](neural-network.md) — MLP, BCE, backprop и flat parameters.
+- [Датасеты](datasets.md) — d1/d2/d3, загрузка, preprocessing и F1.
 
 ## Артефакты лабораторной 1
 

@@ -86,8 +86,13 @@ f1 = model.score(X, y)
 конечной разностью по всем параметрам маленькой XOR-сети. Это защищает flat
 offset layout и формулы backprop от смещений индексов.
 
-## Ограничения S6
+## Лаборатория 3
 
-S6 намеренно держит NN-ядро минимальным: бинарная MLP, full-batch training,
-BCE/F1. Загрузка датасетов, стандартизация, стратифицированное разбиение,
-save/load и `evaluate(path)` относятся к S7.
+S7 добавляет Python pipeline вокруг C++ MLP:
+
+- `MLPClassifier.fit/predict/predict_proba/score`;
+- `train_binary_classifier(path, method=...)`;
+- `evaluate(model, path, standardizer)`;
+- стратифицированное 80/20 разбиение и стандартизацию признаков.
+
+Для d1/d2 baseline обучается минимум двумя оптимизаторами: Adam и HeavyBall.
