@@ -875,7 +875,14 @@ py::dict TrainBinaryMlpBinding(const Array& features,
                                const std::string& initialization,
                                std::size_t seed,
                                double l2,
-                               bool logTrajectory)
+                               bool logTrajectory,
+                               const std::string& schedule,
+                               double learningRateGamma,
+                               std::size_t learningRateStepSize,
+                               double learningRateDecay,
+                               double minimumLearningRate,
+                               std::size_t warmupSteps,
+                               std::size_t scheduleIterations)
 {
     auto featureValue = MatrixFromArray(features);
     auto targetValue = VectorFromArray(targets);
@@ -885,6 +892,13 @@ py::dict TrainBinaryMlpBinding(const Array& features,
     config.Initialization = optlib::ParseInitializationType(initialization);
     config.Seed = seed;
     config.Optimizer.LearningRate = learningRate;
+    config.Optimizer.Schedule = optlib::ParseLearningRateSchedule(schedule);
+    config.Optimizer.LearningRateGamma = learningRateGamma;
+    config.Optimizer.LearningRateStepSize = learningRateStepSize;
+    config.Optimizer.LearningRateDecay = learningRateDecay;
+    config.Optimizer.MinimumLearningRate = minimumLearningRate;
+    config.Optimizer.WarmupSteps = warmupSteps;
+    config.Optimizer.ScheduleIterations = scheduleIterations;
     config.Optimizer.Criteria.MaxIterations = maxIter;
     config.Optimizer.Criteria.GradientTolerance = gradientTolerance;
     config.Optimizer.Criteria.StepTolerance = 0.0;
@@ -1433,5 +1447,10 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("max_iter") = 5000, py::arg("gradient_tolerance") = 1e-5,
                      py::arg("activation") = "tanh", py::arg("initialization") = "xavier",
                      py::arg("seed") = 42, py::arg("l2") = 0.0,
-                     py::arg("log_trajectory") = false);
+                     py::arg("log_trajectory") = false, py::arg("schedule") = "constant",
+                     py::arg("learning_rate_gamma") = 0.5,
+                     py::arg("learning_rate_step_size") = 100,
+                     py::arg("learning_rate_decay") = 1e-3,
+                     py::arg("minimum_learning_rate") = 0.0, py::arg("warmup_steps") = 0,
+                     py::arg("schedule_iterations") = 0);
 }

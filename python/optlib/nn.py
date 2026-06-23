@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Self
+from typing import Any, Self
 
 import numpy as np
 
@@ -29,11 +29,20 @@ class MLPClassifier:
     initialization: str = "xavier"
     seed: int = 42
     l2: float = 0.0
+    schedule: str = "constant"
+    learning_rate_gamma: float = 0.5
+    learning_rate_step_size: int = 100
+    learning_rate_decay: float = 1e-3
+    minimum_learning_rate: float = 0.0
+    warmup_steps: int = 0
+    schedule_iterations: int = 0
+    log_trajectory: bool = False
 
     parameters_: np.ndarray | None = None
     input_dim_: int | None = None
     loss_: float | None = None
     f1_: float | None = None
+    optimizer_result_: dict[str, Any] | None = None
 
     def fit(self, features: np.ndarray, targets: np.ndarray) -> Self:
         feature_array = np.asarray(features, dtype=np.float64)
@@ -50,12 +59,20 @@ class MLPClassifier:
             initialization=self.initialization,
             seed=self.seed,
             l2=self.l2,
-            log_trajectory=False,
+            schedule=self.schedule,
+            learning_rate_gamma=self.learning_rate_gamma,
+            learning_rate_step_size=self.learning_rate_step_size,
+            learning_rate_decay=self.learning_rate_decay,
+            minimum_learning_rate=self.minimum_learning_rate,
+            warmup_steps=self.warmup_steps,
+            schedule_iterations=self.schedule_iterations,
+            log_trajectory=self.log_trajectory,
         )
         self.parameters_ = np.asarray(result["parameters"], dtype=np.float64)
         self.input_dim_ = feature_array.shape[1]
         self.loss_ = float(result["loss"])
         self.f1_ = float(result["f1"])
+        self.optimizer_result_ = result.get("optimizer_result")
         return self
 
     def predict_proba(self, features: np.ndarray) -> np.ndarray:

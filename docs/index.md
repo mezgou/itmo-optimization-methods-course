@@ -33,3 +33,10 @@
   benchmark-функций.
 - `docs/benchmarks.md` фиксирует методологию multistart, метрики и SciPy
   baseline.
+
+## Артефакты лабораторной 4
+
+- `notebooks/fourth_lab.ipynb` сравнивает оптимизаторы, schedules, L2 и
+  sklearn baseline для MLP.
+- `docs/neural-network.md` описывает S8 study helpers.
+- `.agents/defense/lab4.md` содержит сценарий защиты и d3-команды.

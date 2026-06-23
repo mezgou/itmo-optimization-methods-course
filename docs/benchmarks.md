@@ -103,6 +103,29 @@ n in {2, 10, 50, 100}
 масштабных ND-сравнений `log_trajectory=False`, иначе запись всех точек
 искажает измерение памяти и времени.
 
+## Лаборатория 4
+
+Для нейросети основная метрика — F1 на test split. Сравнение строится по
+таблицам:
+
+- optimizer: GD, HeavyBall, Nesterov, Adam, RMSProp, Adagrad;
+- schedule: constant/cosine и при необходимости step/exponential;
+- регуляризация: набор L2 значений;
+- внешний baseline: `sklearn.MLPClassifier`, если установлен.
+
+Запуск:
+
+```python
+rows = optlib.compare_nn_optimizers(
+    "data/first_dataset.csv",
+    methods=["adam", "heavy_ball", "rmsprop"],
+    schedule="cosine",
+)
+```
+
+Для d3 используется тот же `evaluate(model, path, standardizer)`, чтобы
+preprocessing не отличался от d1/d2.
+
 Главный воспроизводимый отчет:
 
 ```powershell

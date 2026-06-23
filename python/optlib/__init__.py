@@ -89,15 +89,20 @@ from .datasets import (
     classification_metrics,
     download,
     evaluate,
+    fit_standardizer,
+    load_binary_dataset_model,
     load_csv,
     load_dataset,
     prepare_dataset,
+    run_lab3_experiment,
     stratified_indices,
+    stratified_split,
     train_binary_classifier,
     train_binary_dataset,
 )
 from .functions import Objective, get_objective, list_objectives
 from .nn import MLPClassifier, binary_mlp_loss_and_gradient, make_two_moons, make_xor
+from .studies import compare_nn_optimizers, regularization_ablation, sklearn_mlp_baseline
 
 __version__ = Version()
 __all__ = [
@@ -180,11 +185,14 @@ __all__ = [
     "binary_mlp_loss_and_gradient",
     "binary_metrics",
     "classification_metrics",
+    "compare_nn_optimizers",
     "compare_methods",
     "download",
     "evaluate",
+    "fit_standardizer",
     "get_objective",
     "list_objectives",
+    "load_binary_dataset_model",
     "load_csv",
     "load_dataset",
     "make_two_moons",
@@ -192,9 +200,13 @@ __all__ = [
     "multistart_compare",
     "prepare_dataset",
     "result_summary",
+    "run_lab3_experiment",
     "run_method",
     "scipy_minimize",
+    "regularization_ablation",
+    "sklearn_mlp_baseline",
     "stratified_indices",
+    "stratified_split",
     "train_binary_classifier",
     "train_binary_dataset",
 ]

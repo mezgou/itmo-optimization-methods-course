@@ -57,6 +57,7 @@ class BinaryDatasetModel:
     classifier: MLPClassifier
     mean: np.ndarray
     std: np.ndarray
+    classes: np.ndarray | None = None
 
     def transform(self, features: np.ndarray) -> np.ndarray:
         return (np.asarray(features, dtype=np.float64) - self.mean) / self.std
@@ -74,6 +75,47 @@ class BinaryDatasetModel:
     def evaluate_path(self, path: str | Path) -> dict[str, Any]:
         features, targets = load_csv(path)
         return self.evaluate(features, targets)
+
+    def save(self, path: str | Path) -> Path:
+        """Persist model weights and preprocessing state for defense runs."""
+
+        self.classifier._require_fitted()
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            destination,
+            parameters=self.classifier.get_parameters(),
+            input_dim=np.array([self.classifier.input_dim_], dtype=np.int64),
+            hidden_dim=np.array([self.classifier.hidden_dim], dtype=np.int64),
+            activation=np.array([self.classifier.activation]),
+            method=np.array([self.classifier.method]),
+            mean=self.mean,
+            std=self.std,
+            classes=np.array([] if self.classes is None else self.classes),
+        )
+        return destination
+
+    @classmethod
+    def load(cls, path: str | Path) -> "BinaryDatasetModel":
+        """Load a persisted binary dataset model."""
+
+        with np.load(path, allow_pickle=False) as data:
+            input_dim = int(data["input_dim"][0])
+            hidden_dim = int(data["hidden_dim"][0])
+            activation = str(data["activation"][0])
+            method = str(data["method"][0])
+            classifier = MLPClassifier(
+                hidden_dim=hidden_dim,
+                activation=activation,
+                method=method,
+            ).set_parameters(data["parameters"], input_dim)
+            classes = np.array(data["classes"], copy=True)
+            return cls(
+                classifier=classifier,
+                mean=np.array(data["mean"], copy=True),
+                std=np.array(data["std"], copy=True),
+                classes=None if classes.size == 0 else classes,
+            )
 
 
 @dataclass(frozen=True)
@@ -139,31 +181,72 @@ def stratified_indices(
     return train_indices, test_indices
 
 
+def stratified_split(
+    features: np.ndarray,
+    targets: np.ndarray,
+    test_size: float = 0.2,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return raw train/test arrays using a deterministic stratified split."""
+
+    feature_array = np.asarray(features, dtype=np.float64)
+    target_array = np.asarray(targets)
+    if feature_array.ndim != 2:
+        raise ValueError("features must be a 2D array")
+    if target_array.ndim != 1:
+        raise ValueError("targets must be a 1D array")
+    if feature_array.shape[0] != target_array.shape[0]:
+        raise ValueError("features and targets must contain the same number of rows")
+    train_indices, test_indices = stratified_indices(target_array, test_size=test_size, seed=seed)
+    return (
+        feature_array[train_indices],
+        target_array[train_indices],
+        feature_array[test_indices],
+        target_array[test_indices],
+    )
+
+
+def fit_standardizer(features: np.ndarray) -> Standardizer:
+    """Fit feature standardization parameters on a train matrix."""
+
+    feature_array = np.asarray(features, dtype=np.float64)
+    mean = np.mean(feature_array, axis=0)
+    std = np.std(feature_array, axis=0)
+    std = np.where(std < 1e-12, 1.0, std)
+    return Standardizer(mean=mean, std=std)
+
+
 def standardize_train_test(
     x_train: np.ndarray,
     x_test: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Fit standardization on train and apply it to train/test."""
 
-    mean = np.mean(x_train, axis=0)
-    std = np.std(x_train, axis=0)
-    std = np.where(std < 1e-12, 1.0, std)
-    return (x_train - mean) / std, (x_test - mean) / std, mean, std
+    standardizer = fit_standardizer(x_train)
+    return (
+        standardizer.transform(x_train),
+        standardizer.transform(x_test),
+        standardizer.mean,
+        standardizer.std,
+    )
 
 
 def load_dataset(path: str | Path, test_size: float = 0.2, seed: int = 42) -> DatasetSplit:
     """Load, stratify, and standardize one CSV dataset."""
 
     features, targets = load_csv(path)
-    train_indices, test_indices = stratified_indices(targets, test_size=test_size, seed=seed)
-    x_train_raw = features[train_indices]
-    x_test_raw = features[test_indices]
+    x_train_raw, y_train, x_test_raw, y_test = stratified_split(
+        features,
+        targets,
+        test_size=test_size,
+        seed=seed,
+    )
     x_train, x_test, mean, std = standardize_train_test(x_train_raw, x_test_raw)
     return DatasetSplit(
         x_train=x_train,
-        y_train=targets[train_indices],
+        y_train=y_train,
         x_test=x_test,
-        y_test=targets[test_indices],
+        y_test=y_test,
         mean=mean,
         std=std,
         classes=np.unique(targets),
@@ -212,7 +295,7 @@ def binary_metrics(
     }
 
 
-def classification_metrics(predictions: np.ndarray, targets: np.ndarray) -> dict[str, Any]:
+def classification_metrics(targets: np.ndarray, predictions: np.ndarray) -> dict[str, Any]:
     """Compatibility metrics for hard binary predictions."""
 
     metrics = binary_metrics(targets, predictions, threshold=0.5)
@@ -229,6 +312,17 @@ def train_binary_dataset(
     max_iter: int = 5000,
     gradient_tolerance: float = 1e-5,
     seed: int = 42,
+    activation: str = "tanh",
+    initialization: str = "xavier",
+    l2: float = 0.0,
+    schedule: str = "constant",
+    learning_rate_gamma: float = 0.5,
+    learning_rate_step_size: int = 100,
+    learning_rate_decay: float = 1e-3,
+    minimum_learning_rate: float = 0.0,
+    warmup_steps: int = 0,
+    schedule_iterations: int = 0,
+    log_trajectory: bool = False,
 ) -> DatasetTrainingResult:
     """Train the native MLP on one binary CSV dataset."""
 
@@ -239,11 +333,27 @@ def train_binary_dataset(
         learning_rate=learning_rate,
         max_iter=max_iter,
         gradient_tolerance=gradient_tolerance,
+        activation=activation,
+        initialization=initialization,
         seed=seed,
+        l2=l2,
+        schedule=schedule,
+        learning_rate_gamma=learning_rate_gamma,
+        learning_rate_step_size=learning_rate_step_size,
+        learning_rate_decay=learning_rate_decay,
+        minimum_learning_rate=minimum_learning_rate,
+        warmup_steps=warmup_steps,
+        schedule_iterations=schedule_iterations,
+        log_trajectory=log_trajectory,
     ).fit(split.x_train, split.y_train)
-    model = BinaryDatasetModel(classifier=classifier, mean=split.mean, std=split.std)
-    train_metrics = model.evaluate(split.x_train * split.std + split.mean, split.y_train)
-    test_metrics = model.evaluate(split.x_test * split.std + split.mean, split.y_test)
+    model = BinaryDatasetModel(
+        classifier=classifier,
+        mean=split.mean,
+        std=split.std,
+        classes=split.classes,
+    )
+    train_metrics = binary_metrics(split.y_train, classifier.predict_proba(split.x_train))
+    test_metrics = binary_metrics(split.y_test, classifier.predict_proba(split.x_test))
     return DatasetTrainingResult(
         model=model,
         split=split,
@@ -260,6 +370,17 @@ def train_binary_classifier(
     learning_rate: float = 0.03,
     max_iter: int = 5000,
     seed: int = 42,
+    activation: str = "tanh",
+    initialization: str = "xavier",
+    l2: float = 0.0,
+    schedule: str = "constant",
+    learning_rate_gamma: float = 0.5,
+    learning_rate_step_size: int = 100,
+    learning_rate_decay: float = 1e-3,
+    minimum_learning_rate: float = 0.0,
+    warmup_steps: int = 0,
+    schedule_iterations: int = 0,
+    log_trajectory: bool = False,
 ) -> tuple[BinaryDatasetModel, PreparedDataset, dict[str, Any]]:
     """Compatibility wrapper returning model, prepared split, and test metrics."""
 
@@ -270,6 +391,17 @@ def train_binary_classifier(
         learning_rate=learning_rate,
         max_iter=max_iter,
         seed=seed,
+        activation=activation,
+        initialization=initialization,
+        l2=l2,
+        schedule=schedule,
+        learning_rate_gamma=learning_rate_gamma,
+        learning_rate_step_size=learning_rate_step_size,
+        learning_rate_decay=learning_rate_decay,
+        minimum_learning_rate=minimum_learning_rate,
+        warmup_steps=warmup_steps,
+        schedule_iterations=schedule_iterations,
+        log_trajectory=log_trajectory,
     )
     prepared = PreparedDataset(
         train_features=result.split.x_train,
@@ -294,3 +426,62 @@ def evaluate(
     features, targets = load_csv(path)
     probabilities = model.classifier.predict_proba(standardizer.transform(features))
     return binary_metrics(targets, probabilities)
+
+
+def load_binary_dataset_model(path: str | Path) -> BinaryDatasetModel:
+    """Load a model saved by BinaryDatasetModel.save."""
+
+    return BinaryDatasetModel.load(path)
+
+
+def run_lab3_experiment(
+    paths: dict[str, str | Path] | list[str | Path] | tuple[str | Path, ...],
+    *,
+    optimizers: tuple[str, ...] = ("adam", "heavy_ball"),
+    hidden_dim: int = 12,
+    learning_rate: float = 0.03,
+    max_iter: int = 5000,
+    activation: str = "tanh",
+    initialization: str = "xavier",
+    l2: float = 0.0,
+    schedule: str = "constant",
+    log_trajectory: bool = False,
+    seed: int = 42,
+) -> list[dict[str, Any]]:
+    """Train d1/d2-style binary classifiers and return tabular experiment rows."""
+
+    if isinstance(paths, dict):
+        dataset_items = list(paths.items())
+    else:
+        dataset_items = [(Path(path).stem, path) for path in paths]
+
+    rows: list[dict[str, Any]] = []
+    for dataset_name, dataset_path in dataset_items:
+        for method in optimizers:
+            result = train_binary_dataset(
+                dataset_path,
+                hidden_dim=hidden_dim,
+                method=method,
+                learning_rate=learning_rate,
+                max_iter=max_iter,
+                activation=activation,
+                initialization=initialization,
+                l2=l2,
+                schedule=schedule,
+                log_trajectory=log_trajectory,
+                seed=seed,
+            )
+            rows.append(
+                {
+                    "dataset": dataset_name,
+                    "method": method,
+                    "train_f1": result.train_metrics["f1"],
+                    "test_f1": result.test_metrics["f1"],
+                    "accuracy": result.test_metrics["accuracy"],
+                    "precision": result.test_metrics["precision"],
+                    "recall": result.test_metrics["recall"],
+                    "confusion_matrix": result.test_metrics["confusion_matrix"],
+                    "loss": result.model.classifier.loss_,
+                }
+            )
+    return rows

@@ -96,3 +96,8 @@ S7 добавляет Python pipeline вокруг C++ MLP:
 - стратифицированное 80/20 разбиение и стандартизацию признаков.
 
 Для d1/d2 baseline обучается минимум двумя оптимизаторами: Adam и HeavyBall.
+
+`TrainBinaryMlp` и `MLPClassifier` принимают LR schedules (`constant`, `step`,
+`exponential`, `cosine`) и warmup-параметры. При `log_trajectory=True`
+wrapper сохраняет `optimizer_result_`, из которого notebook строит кривые BCE
+по итерациям без повторной реализации обучения в Python.

@@ -41,6 +41,21 @@ uv run python scripts/download_dataset.py <file_id> <dest>
 standardizer)` прогоняет уже обученную модель на target-last CSV. Это же
 используется для закрытого d3.
 
+Для экспериментов доступны отдельные строительные блоки:
+
+- `stratified_split(features, targets)` — детерминированное стратифицированное
+  разбиение;
+- `fit_standardizer(features)` — параметры стандартизации, обученные только на
+  train;
+- `run_lab3_experiment(paths)` — табличный прогон Adam/HeavyBall по d1/d2;
+- `BinaryDatasetModel.save(path)` и `load_binary_dataset_model(path)` —
+  сохранение весов MLP вместе с mean/std для live-прогона d3.
+
+`train_binary_classifier` также принимает параметры `activation`,
+`initialization`, `l2` и `schedule`, поэтому в лабораторной 4 тот же pipeline
+используется для ablation по регуляризации, инициализации и расписаниям
+learning rate.
+
 ## Метрики
 
 Основная метрика — F1. Также считаются accuracy, precision, recall и confusion
