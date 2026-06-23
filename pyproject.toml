@@ -1,0 +1,50 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "optlib"
+version = "1.0.0"
+description = "High-performance C++23 optimization library with Python bindings"
+requires-python = ">=3.12"
+dependencies = ["numpy>=2.0"]
+
+[project.optional-dependencies]
+experiments = [
+    "scipy",
+    "matplotlib",
+    "pandas",
+    "scikit-learn",
+    "torch",
+    "jupyter",
+    "ipykernel",
+    "gdown",
+]
+dev = [
+    "scikit-build-core>=0.10",
+    "pybind11>=2.13",
+    "pytest",
+    "pytest-benchmark",
+    "ruff",
+]
+
+[tool.scikit-build]
+cmake.version = ">=3.27"
+cmake.build-type = "Release"
+wheel.packages = ["python/optlib"]
+build-dir = "build/{wheel_tag}"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+    ".agents",
+    ".claude",
+    ".codex",
+    ".venv",
+    "build",
+    "extends",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]

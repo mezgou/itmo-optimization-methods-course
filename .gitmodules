@@ -1,0 +1,6 @@
+[submodule "extends/pybind11"]
+	path = extends/pybind11
+	url = https://github.com/pybind/pybind11
+[submodule "extends/googletest"]
+	path = extends/googletest
+	url = https://github.com/google/googletest
