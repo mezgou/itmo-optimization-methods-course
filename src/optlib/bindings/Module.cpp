@@ -7,6 +7,7 @@
 #include <optlib/core/Version.hpp>
 #include <optlib/core/functions/BenchmarkFunctions.hpp>
 #include <optlib/core/functions/Rosenbrock.hpp>
+#include <optlib/core/nn/NeuralNetwork.hpp>
 #include <optlib/core/optimizers/FirstOrder.hpp>
 #include <optlib/core/optimizers/SecondOrder.hpp>
 #include <optlib/core/optimizers/ZeroOrder.hpp>
@@ -182,6 +183,19 @@ optlib::ZeroOrderConfig MakeZeroOrderConfig(std::size_t maxIter,
     config.LineSearchRadius = lineSearchRadius;
     config.LineSearchTolerance = lineSearchTolerance;
     config.StoreTrajectory = logTrajectory;
+    return config;
+}
+
+optlib::BinaryMlpConfig MakeBinaryMlpConfig(std::size_t inputDim,
+                                            std::size_t hiddenDim,
+                                            const std::string& activation,
+                                            double l2)
+{
+    optlib::BinaryMlpConfig config;
+    config.InputDim = inputDim;
+    config.HiddenDim = hiddenDim;
+    config.Activation = optlib::ParseActivationType(activation);
+    config.L2 = l2;
     return config;
 }
 
@@ -779,6 +793,117 @@ py::dict MinimizeBenchmarkFunctionZeroOrderBinding(const std::string& functionNa
     return OptimizeResultToDict(std::move(result));
 }
 
+std::size_t BinaryMlpParameterCountBinding(std::size_t inputDim, std::size_t hiddenDim)
+{
+    return optlib::BinaryMlpParameterCount(MakeBinaryMlpConfig(inputDim, hiddenDim, "tanh", 0.0));
+}
+
+py::array_t<double> InitializeBinaryMlpParametersBinding(std::size_t inputDim,
+                                                         std::size_t hiddenDim,
+                                                         const std::string& activation,
+                                                         const std::string& initialization,
+                                                         std::size_t seed)
+{
+    auto config = MakeBinaryMlpConfig(inputDim, hiddenDim, activation, 0.0);
+    optlib::Vector parameters;
+    {
+        py::gil_scoped_release release;
+        parameters = optlib::InitializeBinaryMlpParameters(
+            config, optlib::ParseInitializationType(initialization), seed);
+    }
+    return VectorToArray(std::move(parameters));
+}
+
+py::array_t<double> BinaryMlpPredictProbaBinding(const Array& parameters,
+                                                 const Array& features,
+                                                 std::size_t inputDim,
+                                                 std::size_t hiddenDim,
+                                                 const std::string& activation)
+{
+    auto parameterValue = VectorFromArray(parameters);
+    auto featureValue = MatrixFromArray(features);
+    auto config = MakeBinaryMlpConfig(inputDim, hiddenDim, activation, 0.0);
+    optlib::Vector probabilities;
+    {
+        py::gil_scoped_release release;
+        probabilities = optlib::BinaryMlpPredictProba(parameterValue.Span(), featureValue, config);
+    }
+    return VectorToArray(std::move(probabilities));
+}
+
+py::dict BinaryMlpLossAndGradientBinding(const Array& parameters,
+                                         const Array& features,
+                                         const Array& targets,
+                                         std::size_t inputDim,
+                                         std::size_t hiddenDim,
+                                         const std::string& activation,
+                                         double l2)
+{
+    auto parameterValue = VectorFromArray(parameters);
+    auto featureValue = MatrixFromArray(features);
+    auto targetValue = VectorFromArray(targets);
+    auto config = MakeBinaryMlpConfig(inputDim, hiddenDim, activation, l2);
+    optlib::Vector gradient(optlib::BinaryMlpParameterCount(config));
+    double loss = 0.0;
+    {
+        py::gil_scoped_release release;
+        loss = optlib::BinaryMlpLossAndGradient(
+            parameterValue.Span(), featureValue, targetValue.Span(), config, gradient.Span());
+    }
+    py::dict output;
+    output["loss"] = loss;
+    output["gradient"] = VectorToArray(std::move(gradient));
+    return output;
+}
+
+double BinaryF1ScoreBinding(const Array& probabilities, const Array& targets, double threshold)
+{
+    auto probabilityValue = VectorFromArray(probabilities);
+    auto targetValue = VectorFromArray(targets);
+    py::gil_scoped_release release;
+    return optlib::BinaryF1Score(probabilityValue.Span(), targetValue.Span(), threshold);
+}
+
+py::dict TrainBinaryMlpBinding(const Array& features,
+                               const Array& targets,
+                               std::size_t hiddenDim,
+                               const std::string& method,
+                               double learningRate,
+                               std::size_t maxIter,
+                               double gradientTolerance,
+                               const std::string& activation,
+                               const std::string& initialization,
+                               std::size_t seed,
+                               double l2,
+                               bool logTrajectory)
+{
+    auto featureValue = MatrixFromArray(features);
+    auto targetValue = VectorFromArray(targets);
+    optlib::BinaryMlpTrainConfig config;
+    config.Network = MakeBinaryMlpConfig(featureValue.Cols(), hiddenDim, activation, l2);
+    config.Method = optlib::ParseFirstOrderMethod(method);
+    config.Initialization = optlib::ParseInitializationType(initialization);
+    config.Seed = seed;
+    config.Optimizer.LearningRate = learningRate;
+    config.Optimizer.Criteria.MaxIterations = maxIter;
+    config.Optimizer.Criteria.GradientTolerance = gradientTolerance;
+    config.Optimizer.Criteria.StepTolerance = 0.0;
+    config.Optimizer.Criteria.FunctionTolerance = 0.0;
+    config.Optimizer.StoreTrajectory = logTrajectory;
+
+    optlib::BinaryMlpTrainResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::TrainBinaryMlp(featureValue, targetValue.Span(), config);
+    }
+    py::dict output;
+    output["parameters"] = VectorToArray(std::move(result.Parameters));
+    output["loss"] = result.Loss;
+    output["f1"] = result.F1;
+    output["optimizer_result"] = OptimizeResultToDict(std::move(result.OptimizerResult));
+    return output;
+}
+
 } // namespace
 
 PYBIND11_MODULE(_optlib, moduleHandle)
@@ -818,6 +943,16 @@ PYBIND11_MODULE(_optlib, moduleHandle)
         .value("NelderMead", optlib::ZeroOrderMethod::NelderMead)
         .value("Powell", optlib::ZeroOrderMethod::Powell)
         .value("CoordinateSearch", optlib::ZeroOrderMethod::CoordinateSearch)
+        .export_values();
+    py::enum_<optlib::ActivationType>(moduleHandle, "ActivationType")
+        .value("Relu", optlib::ActivationType::Relu)
+        .value("LeakyRelu", optlib::ActivationType::LeakyRelu)
+        .value("Sigmoid", optlib::ActivationType::Sigmoid)
+        .value("Tanh", optlib::ActivationType::Tanh)
+        .export_values();
+    py::enum_<optlib::InitializationType>(moduleHandle, "InitializationType")
+        .value("Xavier", optlib::InitializationType::Xavier)
+        .value("He", optlib::InitializationType::He)
         .export_values();
 
     moduleHandle.def("Version", []() { return std::string(optlib::Version()); });
@@ -1277,4 +1412,26 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("line_search_radius") = 1.0,
                      py::arg("line_search_tolerance") = 1e-6,
                      py::arg("log_trajectory") = true, py::arg("scale") = 1.0);
+    moduleHandle.def("BinaryMlpParameterCount", &BinaryMlpParameterCountBinding,
+                     py::arg("input_dim"), py::arg("hidden_dim"));
+    moduleHandle.def("InitializeBinaryMlpParameters", &InitializeBinaryMlpParametersBinding,
+                     py::arg("input_dim"), py::arg("hidden_dim"),
+                     py::arg("activation") = "tanh", py::arg("initialization") = "xavier",
+                     py::arg("seed") = 42);
+    moduleHandle.def("BinaryMlpPredictProba", &BinaryMlpPredictProbaBinding,
+                     py::arg("parameters"), py::arg("features"), py::arg("input_dim"),
+                     py::arg("hidden_dim"), py::arg("activation") = "tanh");
+    moduleHandle.def("BinaryMlpLossAndGradient", &BinaryMlpLossAndGradientBinding,
+                     py::arg("parameters"), py::arg("features"), py::arg("targets"),
+                     py::arg("input_dim"), py::arg("hidden_dim"),
+                     py::arg("activation") = "tanh", py::arg("l2") = 0.0);
+    moduleHandle.def("BinaryF1Score", &BinaryF1ScoreBinding, py::arg("probabilities"),
+                     py::arg("targets"), py::arg("threshold") = 0.5);
+    moduleHandle.def("TrainBinaryMlp", &TrainBinaryMlpBinding, py::arg("features"),
+                     py::arg("targets"), py::arg("hidden_dim") = 8,
+                     py::arg("method") = "adam", py::arg("learning_rate") = 0.01,
+                     py::arg("max_iter") = 5000, py::arg("gradient_tolerance") = 1e-5,
+                     py::arg("activation") = "tanh", py::arg("initialization") = "xavier",
+                     py::arg("seed") = 42, py::arg("l2") = 0.0,
+                     py::arg("log_trajectory") = false);
 }

@@ -17,6 +17,7 @@ Python-пакет `optlib`.
 - `Differentiation.hpp/.cpp` — численные градиенты и автодифференцирование.
 - `functions/Rosenbrock.*` — значение, градиент и гессиан Розенброка.
 - `optimizers/FirstOrder.*` — GD, HeavyBall, Nesterov, Adam, RMSProp, Adagrad.
+- `nn/NeuralNetwork.*` — бинарная MLP с плоским вектором параметров.
 - `OptimizeResult.hpp` — результат оптимизации и отключаемая траектория.
 
 ## Биндинги
