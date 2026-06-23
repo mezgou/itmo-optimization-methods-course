@@ -1,2 +1,3 @@
-# itmo-optimization-methods-course
-Optimization Methods course
+# Optimization Methods course
+
+### Работа по курсу ИТМО "Методы оптимизации"
