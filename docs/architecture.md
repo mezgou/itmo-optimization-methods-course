@@ -1,64 +1,84 @@
 # Архитектура
 
-Библиотека разделена на три слоя: C++23-ядро, pybind11-биндинги и тонкий
-Python-пакет `optlib`.
+`optlib` состоит из трех слоев:
+
+- C++23 ядро в `src/optlib/core/`;
+- pybind11 bindings в `src/optlib/bindings/Module.cpp`;
+- Python пакет в `python/optlib/`.
+
+Слой C++ отвечает за вычислительно дорогие операции. Python слой отвечает за
+экспериментальные сценарии, графики, загрузку данных и удобные wrappers.
 
 ## C++ ядро
 
-Исходники находятся в `src/optlib/core/`. Ядро не зависит от Eigen, BLAS, Boost
-или CUDA: контейнеры, линейная алгебра, дифференцирование и оптимизаторы
-реализованы внутри проекта.
-
 Ключевые модули:
 
-- `LinAlg.hpp` — плотные `Vector` и `Matrix`, `Dot`, `Norm2`, `Axpy`, `Gemv`,
-  `Gemm`.
-- `Dual.hpp` — forward-mode multidual числа.
-- `Differentiation.hpp/.cpp` — численные градиенты и автодифференцирование.
-- `functions/*.hpp/.cpp` — тестовые функции лабораторных 1-2: Rosenbrock,
-  Rastrigin, Himmelblau, Ackley, DesmosSurface, Beale, Booth,
-  Styblinski-Tang.
-- `optimizers/FirstOrder.*` — GD, HeavyBall, Nesterov, Adam, RMSProp, Adagrad.
-- `optimizers/SecondOrder.*` — Newton, BFGS, L-BFGS с line search.
-- `optimizers/ZeroOrder.*` — Nelder-Mead, Powell и coordinate search для
-  black-box поверхностей.
-- `nn/NeuralNetwork.*` — бинарная MLP с плоским вектором параметров.
-- `OptimizeResult.hpp` — результат оптимизации и отключаемая траектория.
+- `LinAlg.hpp` - плотные `Vector` и `Matrix`, `Dot`, `Norm2`, `NormInf`,
+  `Axpy`, `Gemv`, `Gemm`.
+- `Dual.hpp` - dual numbers для forward-mode autodiff.
+- `Differentiation.hpp/.cpp` - конечные разности и autograd gradient.
+- `functions/` - тестовые функции и registry benchmark-функций.
+- `optimizers/FirstOrder.*` - Gradient Descent, HeavyBall, Nesterov, Adam,
+  RMSProp, Adagrad.
+- `optimizers/SecondOrder.*` - Newton, BFGS, L-BFGS и line search.
+- `optimizers/ZeroOrder.*` - Nelder-Mead, Powell, coordinate search.
+- `schedulers/LearningRate.*` - `constant`, `step`, `exponential`, `cosine`,
+  warmup.
+- `nn/NeuralNetwork.*` - бинарная MLP с плоским вектором параметров.
+- `OptimizeResult.hpp` - общий результат оптимизации и траектория.
 
-## Биндинги
+Ядро не зависит от Eigen, BLAS, Boost или CUDA. Внутренние контейнеры хранят
+данные в contiguous `double` буферах.
 
-`src/optlib/bindings/Module.cpp` экспортирует расширение `_optlib`. На входе
-используются C-contiguous `numpy.ndarray` с `forcecast` к `double`. Для
-результатов C++ создает собственное хранилище и передает его в NumPy через
-`py::capsule`, поэтому лишняя копия при возврате не нужна.
+## Граница pybind11
 
-Горячие C++ участки освобождают GIL. Если целевая функция или градиент приходят
-из Python, GIL захватывается только на время Python-вызова.
+Bindings принимают `numpy.ndarray` и приводят входы к C-contiguous `float64`,
+если это необходимо. Для результатов C++ создает собственное хранилище и
+передает владение в NumPy через `py::capsule`.
 
-## Python API
+Горячие C++ участки освобождают GIL. Если пользователь передает Python callback
+для функции или градиента, GIL захватывается только на время этого callback.
 
-`python/optlib/__init__.py` реэкспортирует публичные функции из `_optlib`.
-Чистый Python-слой содержит только экспериментальную инфраструктуру:
-реестр функций, графики, загрузку датасетов, study-функции и удобный класс
-`MLPClassifier` поверх нативной MLP. Пакет собирается через scikit-build-core
-и CMake, поэтому обычный импорт:
+## Python слой
 
-```python
-import optlib
-```
+`python/optlib/__init__.py` реэкспортирует публичный API из `_optlib` и helper
+модулей:
 
-дает доступ к C++ реализации и воспроизводимым исследовательским оберткам.
+- `functions.py` - реестр objective descriptors.
+- `experiments.py` и `benchmarks.py` - запуск сравнений оптимизаторов.
+- `nn.py` - класс `MLPClassifier` поверх native MLP.
+- `datasets.py` - CSV, stratified split, standardization, F1, save/load.
+- `studies.py` - сравнение оптимизаторов MLP, ablation, sklearn/PyTorch baseline.
+- `plotting.py` - компактные функции визуализации для ноутбуков.
 
-## Воспроизводимые артефакты
+## Контракт результата
 
-Ноутбуки `notebooks/first_lab.ipynb`, `notebooks/second_lab.ipynb`,
-`notebooks/third_lab.ipynb` и `notebooks/fourth_lab.ipynb` генерируются из
-скриптов `_build_*_lab.py`. Это сохраняет единый стиль, повторяемые seed и
-позволяет быстро пересобрать ноутбуки после изменения API.
+Оптимизаторы возвращают `dict` со стабильными ключами:
 
-Все лабораторные используют общий контракт результатов: `OptimizeResult`,
-`trajectory`, таблицы `pandas.DataFrame` и функции из `optlib.plotting`.
-Для закрытого d3 предусмотрены два режима: прямое применение сохраненной
-бинарной модели, если формат совпадает с обучающим датасетом, и независимая
-оценка через `studies.weighted_f1_score`, если d3 имеет другую размерность или
-несколько классов.
+- `x` - финальная точка;
+- `value` - значение функции;
+- `gradient_norm` - норма градиента, если метод ее вычисляет;
+- `iterations`;
+- `function_evaluations`;
+- `gradient_evaluations`;
+- `hessian_evaluations`;
+- `converged`;
+- `trajectory`.
+
+`trajectory` содержит `x`, `f`, `grad_norm`, `time_ms`. Запись траектории можно
+выключить через `log_trajectory=False`, чтобы не тратить память на большие
+сравнения.
+
+## Поток данных
+
+Типовой pipeline:
+
+1. Python готовит `numpy.ndarray`.
+2. pybind11 проверяет размерность и тип.
+3. C++ копирует вход в `Vector` или `Matrix`, если нужна внутренняя ownership
+   модель.
+4. Оптимизатор или MLP работает без GIL.
+5. Результат возвращается как NumPy массив или Python `dict`.
+
+Такой контракт упрощает ноутбуки: графики и таблицы строятся на обычных NumPy и
+pandas структурах, а тяжелые вычисления остаются в C++.

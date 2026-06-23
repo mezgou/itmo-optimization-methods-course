@@ -1,11 +1,7 @@
 # Справочник API
 
-Этот раздел фиксирует публичный Python API пакета `optlib`. C++ имена
-сохраняются в PascalCase, потому что Python-слой реэкспортирует функции из
-расширения `_optlib`; вспомогательные экспериментальные обертки в
-`python/optlib/*.py` используют обычный snake_case.
-
-## Импорт и версия
+Пакет импортируется как `optlib`. Нативные функции из `_optlib` сохраняют
+PascalCase имена C++ API. Python helpers используют snake_case.
 
 ```python
 import optlib
@@ -14,47 +10,28 @@ print(optlib.__version__)
 print(optlib.Version())
 ```
 
-`optlib` собирается как Python-пакет с C++23-расширением `_optlib`. Горячие
-нативные функции освобождают GIL. На вход ожидаются `numpy.ndarray` с
-`float64`; C-contiguous массивы проходят без лишней копии, несовместимые входы
-могут быть приведены pybind11.
-
 ## Линейная алгебра
-
-Функции работают с одномерными или двумерными NumPy-массивами:
 
 - `Dot(left, right)` - скалярное произведение.
 - `Norm2(values)` - евклидова норма.
 - `NormInf(values)` - бесконечная норма.
-- `Axpy(alpha, x, y)` - возвращает `y + alpha * x`.
-- `Gemv(matrix, vector)` - матрично-векторное произведение.
-- `Gemm(left, right)` - матричное произведение.
+- `Axpy(alpha, x, y)` - `y + alpha * x`.
+- `Gemv(matrix, vector)` - матрица на вектор.
+- `Gemm(left, right)` - матрица на матрицу.
 
-В C++ ядре этим функциям соответствуют контейнеры `Vector` и `Matrix` в
-`src/optlib/core/LinAlg.hpp`; Python API намеренно не раскрывает владение этими
-контейнерами напрямую.
+## Дифференцирование
 
-## Дифференцирование и функции
+- `NumericGradient(function, x, scheme="central", step=0.0)`;
+- `RosenbrockNumericalGradient(x, scheme="central", step=0.0)`;
+- `RosenbrockAutogradGradient(x)`.
 
-Базовые функции Розенброка:
+Схемы: `"forward"`, `"central"`, `"five_point"`.
 
-- `RosenbrockValue(x)`
-- `RosenbrockGradient(x)`
-- `RosenbrockHessian(x)`
-- `RosenbrockNumericalGradient(x, scheme="central", step=0.0)`
-- `RosenbrockAutogradGradient(x)`
+## Benchmark-функции
 
-Для произвольной Python-функции доступна численная производная:
+Специализированные функции:
 
-```python
-gradient = optlib.NumericGradient(objective, x, scheme="five_point")
-```
-
-Поддерживаемые схемы: `"forward"`, `"central"`, `"five_point"`. Если `step=0`,
-ядро выбирает шаг по машинному epsilon и масштабу координаты.
-
-Benchmark-функции лабораторной 2:
-
+- `RosenbrockValue`, `RosenbrockGradient`, `RosenbrockHessian`;
 - `RastriginValue`, `RastriginGradient`, `RastriginHessian`,
   `RastriginAutogradGradient`;
 - `HimmelblauValue`, `HimmelblauGradient`, `HimmelblauHessian`,
@@ -67,140 +44,165 @@ Benchmark-функции лабораторной 2:
 
 Унифицированный доступ:
 
-- `BenchmarkFunctionInfo(name, dimension=2)`
-- `BenchmarkFunctionValue(name, x, scale=1.0)`
-- `BenchmarkFunctionGradient(name, x)`
-- `BenchmarkFunctionHessian(name, x)`
+- `BenchmarkFunctionInfo(name, dimension=2)`;
+- `BenchmarkFunctionValue(name, x, scale=1.0)`;
+- `BenchmarkFunctionGradient(name, x)`;
+- `BenchmarkFunctionHessian(name, x)`.
 
-Python-обертки `get_objective(name, dimension)` и `list_objectives()` находятся
-в `optlib.functions` и реэкспортируются из `optlib`.
+Python registry:
+
+```python
+names = optlib.list_objectives()
+objective = optlib.get_objective("rosenbrock", dimension=10)
+```
 
 ## Оптимизаторы
 
-Методы первого порядка:
+First-order:
 
-- `Minimize(value_function, gradient_function, x0, method="adam", ...)`
-- `MinimizeRosenbrock(x0, method="adam", ...)`
-- `MinimizeBenchmarkFunction(function_name, x0, method="adam", ...)`
+```python
+result = optlib.Minimize(value, gradient, x0, method="adam")
+result = optlib.MinimizeRosenbrock(x0, method="heavy_ball")
+result = optlib.MinimizeBenchmarkFunction("rastrigin", x0, method="rmsprop")
+```
 
-Поддерживаемые `method`: `"gradient_descent"`, `"heavy_ball"`, `"nesterov"`,
-`"adam"`, `"rmsprop"`, `"adagrad"`.
+Методы: `"gradient_descent"`, `"heavy_ball"`, `"nesterov"`, `"adam"`,
+`"rmsprop"`, `"adagrad"`.
 
-Методы второго порядка:
+Second-order:
 
-- `MinimizeSecondOrder(value_function, gradient_function, x0, method="lbfgs", ...)`
-- `MinimizeRosenbrockSecondOrder(x0, method="bfgs", ...)`
-- `MinimizeBenchmarkFunctionSecondOrder(function_name, x0, method="lbfgs", ...)`
+```python
+result = optlib.MinimizeSecondOrder(value, gradient, x0, method="lbfgs")
+result = optlib.MinimizeRosenbrockSecondOrder(x0, method="bfgs")
+result = optlib.MinimizeBenchmarkFunctionSecondOrder("ackley", x0, method="newton")
+```
 
-Поддерживаемые `method`: `"newton"`, `"bfgs"`, `"lbfgs"`. Для Newton можно
-передать `hessian_function`; BFGS и L-BFGS используют градиенты и line search.
+Методы: `"newton"`, `"bfgs"`, `"lbfgs"`.
 
-Методы нулевого порядка:
+Zero-order:
 
-- `MinimizeZeroOrder(value_function, x0, method="nelder_mead", ...)`
-- `MinimizeRosenbrockZeroOrder(x0, method="nelder_mead", ...)`
-- `MinimizeBenchmarkFunctionZeroOrder(function_name, x0, method="nelder_mead", ...)`
+```python
+result = optlib.MinimizeZeroOrder(value, x0, method="powell")
+result = optlib.MinimizeRosenbrockZeroOrder(x0, method="nelder_mead")
+result = optlib.MinimizeBenchmarkFunctionZeroOrder("desmos_surface", x0)
+```
 
-Поддерживаемые `method`: `"nelder_mead"`, `"powell"`, `"coordinate_search"`.
+Методы: `"nelder_mead"`, `"powell"`, `"coordinate_search"`.
 
-Все оптимизаторы возвращают `dict`:
+Learning-rate helper:
 
-- `x` - найденная точка;
-- `value` - значение функции;
-- `gradient_norm` - норма градиента, если метод ее вычисляет;
+```python
+lr = optlib.LearningRateAt(10, schedule="step", initial_learning_rate=0.1)
+```
+
+Schedules: `"constant"`, `"step"`, `"exponential"`, `"cosine"`.
+
+## Результат оптимизации
+
+Оптимизаторы возвращают `dict`:
+
+- `x`;
+- `value`;
+- `gradient_norm`;
 - `iterations`;
 - `function_evaluations`;
 - `gradient_evaluations`;
 - `hessian_evaluations`;
 - `converged`;
-- `trajectory` - словарь `x`, `f`, `grad_norm`, `time_ms`.
+- `trajectory`.
 
-Для learning-rate schedules доступны:
+`trajectory` содержит `x`, `f`, `grad_norm`, `time_ms`.
 
-- `LearningRateAt(iteration, schedule="constant", initial_learning_rate=...)`
-- `LearningRateSchedule` enum из C++.
+## MLP
 
-Строковые schedules: `"constant"`, `"step"`, `"exponential"`, `"cosine"`.
+Native API:
 
-## Нейронная сеть
+- `BinaryMlpParameterCount(input_dim, hidden_dim)`;
+- `InitializeBinaryMlpParameters(input_dim, hidden_dim, activation="tanh", initialization="xavier")`;
+- `BinaryMlpPredictProba(parameters, features, input_dim, hidden_dim, activation="tanh")`;
+- `BinaryMlpLossAndGradient(parameters, features, targets, input_dim, hidden_dim, activation="tanh", l2=0.0)`;
+- `BinaryF1Score(probabilities, targets, threshold=0.5)`;
+- `TrainBinaryMlp(features, targets, hidden_dim=8, method="adam")`.
 
-Нативные функции MLP:
-
-- `BinaryMlpParameterCount(input_dim, hidden_dim)`
-- `InitializeBinaryMlpParameters(input_dim, hidden_dim, activation="tanh", ...)`
-- `BinaryMlpPredictProba(parameters, features, input_dim, hidden_dim, activation="tanh")`
-- `BinaryMlpLossAndGradient(parameters, features, targets, input_dim, hidden_dim, ...)`
-- `BinaryF1Score(probabilities, targets, threshold=0.5)`
-- `TrainBinaryMlp(features, targets, hidden_dim=8, method="adam", ...)`
-
-Высокоуровневый Python-класс:
+Python wrapper:
 
 ```python
-model = optlib.MLPClassifier(hidden_dim=8, method="adam")
+model = optlib.MLPClassifier(hidden_dim=12, method="adam")
 model.fit(features, targets)
 probabilities = model.predict_proba(features)
 labels = model.predict(features)
+f1 = model.score(features, targets)
 ```
 
-Поддерживаемые activation: `"relu"`, `"leaky_relu"`, `"sigmoid"`, `"tanh"`.
-Поддерживаемые initialization: `"xavier"`, `"he"`.
+## Данные и study helpers
 
-## Датасеты и исследования
+CSV и preprocessing:
 
-Работа с d1/d2/d3:
+- `load_csv(path)`;
+- `load_dataset(path, test_size=0.2, seed=42)`;
+- `prepare_dataset(path, test_size=0.2, seed=42)`;
+- `stratified_split(features, targets, test_size=0.2, seed=42)`;
+- `fit_standardizer(features)`;
+- `download(file_id, dest)`.
 
-- `load_csv(path)`
-- `load_dataset(path)`
-- `download(file_id, dest)`
-- `stratified_indices(targets, test_size=0.2, seed=42)`
-- `stratified_split(features, targets, test_size=0.2, seed=42)`
-- `fit_standardizer(features)`
-- `prepare_dataset(path, test_size=0.2, seed=42)`
-- `train_binary_classifier(path, ...)`
-- `train_binary_dataset(path, ...)`
-- `evaluate(model, path, standardizer=None)`
-- `evaluate_saved_model(model_path, dataset_path)`
-- `run_lab3_experiment(path, ...)`
-- `classification_metrics(predictions, targets)`
-- `binary_metrics(probabilities, targets, threshold=0.5)`
+Обучение и оценка:
 
-Идентификаторы Google Drive:
+- `train_binary_dataset(path, ...)`;
+- `train_binary_classifier(path, ...)`;
+- `evaluate(model, path, standardizer=None)`;
+- `evaluate_saved_model(model_path, dataset_path)`;
+- `binary_metrics(targets, probabilities, threshold=0.5)`;
+- `classification_metrics(targets, predictions)`.
 
-- `FIRST_DATASET_ID`
-- `SECOND_DATASET_ID`
+Сравнительные исследования:
 
-Исследования лабораторной 4:
+- `compare_methods(objective, x0, methods, ...)`;
+- `multistart_compare(objective, methods, starts=..., ...)`;
+- `run_method(objective, x0, method, ...)`;
+- `result_summary(method, result, objective=None, wall_ms=None)`;
+- `scipy_minimize(objective, x0, method="BFGS")`;
+- `compare_nn_optimizers(path, ...)`;
+- `regularization_ablation(path, ...)`;
+- `initialization_ablation(path, ...)`;
+- `optimizer_stability(path, ...)`;
+- `train_dataset_score(path, ...)`;
+- `weighted_f1_score(paths, weights=None, ...)`;
+- `sklearn_mlp_baseline(path, ...)`;
+- `torch_mlp_baseline(path, ...)`.
 
-- `compare_nn_optimizers(path, methods=None, schedule="constant", ...)`
-- `regularization_ablation(path, l2_values=None, ...)`
-- `initialization_ablation(path, initializations=None, ...)`
-- `optimizer_stability(path, methods=None, seeds=None, ...)`
-- `sklearn_mlp_baseline(path, ...)`
-- `torch_mlp_baseline(path, ...)`
-- `train_dataset_score(path, ...)`
-- `weighted_f1_score(paths, weights=None, ...)`
+Optional baseline функции возвращают `None`, если соответствующая внешняя
+библиотека не установлена.
 
-Если `scikit-learn` или `torch` не установлены, соответствующие baseline-функции
-возвращают `None`.
+## Plotting helpers
 
-`train_dataset_score` использует native binary MLP для бинарных CSV. Если в
-target больше двух классов, функция обучает one-vs-rest набор binary MLP и
-возвращает macro-F1; это нужно для закрытого d3 с заранее неизвестным числом
-классов.
+Функции из `optlib.plotting` используются ноутбуками и доступны через submodule:
 
-## Экспериментальные обертки
+- `use_notebook_style()`;
+- `objective_grid(objective, x_range, y_range, points=...)`;
+- `plot_contours(...)`;
+- `plot_trajectories(...)`;
+- `plot_convergence(...)`;
+- `plot_surface3d(...)`;
+- `plot_confusion_matrix(...)`;
+- `plot_decision_boundary(...)`;
+- `bar_comparison(...)`.
 
-Для лабораторных используются дополнительные функции:
+Они не являются частью C++ ядра и не влияют на пакетный runtime без extra
+`experiments`.
 
-- `compare_methods(objective, x0, methods, ...)`
-- `multistart_compare(objective, methods, ...)`
-- `run_method(objective, x0, method, ...)`
-- `result_summary(result, objective=None)`
-- `scipy_minimize(objective, x0, method="BFGS")`
-- `make_xor()`
-- `make_two_moons()`
-- `binary_mlp_loss_and_gradient(...)`
+## C++ header surface
 
-`scipy_minimize` и `sklearn_mlp_baseline` являются внешними эталонами для
-экспериментов. Если соответствующая зависимость не установлена, обертка не
-ломает основной пакет `optlib`.
+Публичная C++ поверхность расположена в `src/optlib/core/`:
+
+- `Vector`, `Matrix`;
+- `Trajectory`, `OptimizeResult`, `StopCriteria`;
+- `Dual`;
+- `ComputeGradient`, `ComputeAutogradGradient`;
+- benchmark-функции и `BenchmarkFunctionInfo`;
+- `FirstOrderConfig`, `SecondOrderConfig`, `ZeroOrderConfig`;
+- `MinimizeFirstOrder`, `MinimizeSecondOrder`, `MinimizeZeroOrder`;
+- `LineSearchConfig`, `ArmijoLineSearch`, `WolfeLineSearch`;
+- `LearningRateConfig`, `LearningRateAt`;
+- `BinaryMlpConfig`, `BinaryMlpTrainingResult`, native train/predict/loss/F1 API.
+
+Для внешнего пользователя рекомендуемый стабильный интерфейс - Python API.

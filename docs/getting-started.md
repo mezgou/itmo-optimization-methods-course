@@ -1,64 +1,103 @@
 # Начало работы
 
-`optlib` собирается как Python-пакет с C++23-расширением `_optlib`. На границе
-Python/C++ используется pybind11, а сборкой управляют CMake и scikit-build-core.
-Инструкции здесь не дублируются в `README.md`, потому что корневой файл оставлен
-нетронутым по требованиям проекта.
+## Требования
 
-## Окружение
+Проект рассчитан на Windows и установленный C++ toolchain с поддержкой C++23.
+На Windows достаточно MSVC из Visual Studio Build Tools. Дополнительный clang не
+нужен.
 
-Проект рассчитан на Python `>=3.12` и `uv`.
+Нужны:
+
+- `uv` для Python-окружения;
+- CMake 3.27 или новее;
+- компилятор C++23;
+- vendored `pybind11` и GoogleTest из `extends/`.
+
+C++ зависимости ограничены pybind11 и GoogleTest. Линейная алгебра,
+дифференцирование, оптимизаторы и MLP реализованы внутри `optlib`.
+
+## Установка окружения
+
+Базовая разработческая установка:
 
 ```powershell
-uv sync --extra experiments --extra dev
+uv sync --extra dev
 uv pip install -e . --no-build-isolation
 ```
 
-На Windows компилятор MSVC может быть доступен только после инициализации среды
-Visual Studio. Если обычный PowerShell не видит `cl.exe`, запустите команды через
-`VsDevCmd.bat` из установленной Visual Studio Build Tools или Community.
+Для ноутбуков и внешних baseline:
 
-## Проверка этапа
+```powershell
+uv sync --extra dev --extra experiments
+uv pip install -e . --no-build-isolation
+```
 
-Перед коммитом каждого этапа выполняется одинаковый gate:
+Проверка импорта:
+
+```powershell
+uv run python -c "import optlib; print(optlib.__version__)"
+```
+
+## Сборка C++
+
+Обычная Release-сборка:
+
+```powershell
+cmake -B build -DOPTLIB_BUILD_TESTS=ON -DOPTLIB_BUILD_BENCHMARKS=ON
+cmake --build build --config Release
+ctest --test-dir build
+```
+
+scikit-build-core использует CMake при сборке editable пакета, поэтому команда
+`uv pip install -e . --no-build-isolation` также пересобирает `_optlib`.
+
+## Проверка качества
+
+Минимальный набор проверок:
 
 ```powershell
 uv pip install -e . --no-build-isolation
 uv run pytest -q
 uv run ruff check .
 uv run ruff format --check .
-cmake -B build -DOPTLIB_BUILD_TESTS=ON
-cmake --build build
 ctest --test-dir build
 ```
 
-Для запуска ноутбуков и сравнений со SciPy установите экспериментальные
-зависимости:
+Если `build/` еще не создан, перед `ctest` выполните CMake-команды из раздела
+выше.
+
+## Запуск ноутбуков
+
+Готовые отчеты лежат в `notebooks/`. Для интерактивного запуска:
 
 ```powershell
-uv sync --extra experiments --extra dev
 uv run jupyter notebook notebooks/first_lab.ipynb
+uv run jupyter notebook notebooks/second_lab.ipynb
+uv run jupyter notebook notebooks/third_lab.ipynb
+uv run jupyter notebook notebooks/fourth_lab.ipynb
 ```
 
-## Текущая структура
+Пересборка ноутбуков из генераторов:
 
-- `src/optlib/` — C++23-ядро и pybind11-биндинги.
-- `python/optlib/` — Python-пакет, который реэкспортирует `_optlib`.
-- `tests/cpp/` — GoogleTest-тесты, запускаемые через CTest.
-- `tests/python/` — pytest-тесты публичного Python API.
-- `extends/pybind11` и `extends/googletest` — git submodule-зависимости.
-- `notebooks/first_lab.ipynb` — воспроизводимый отчет первой лабораторной.
-- `docs/` — русскоязычная документация по темам, а не по номерам лабораторных.
+```powershell
+uv run python notebooks/_build_first_lab.py
+uv run python notebooks/_build_second_lab.py
+uv run python notebooks/_build_third_lab.py
+uv run python notebooks/_build_fourth_lab.py
+```
 
-## Проверенные источники для сборки
+## Данные
 
-Для первичной настройки использованы официальные материалы:
+Открытые CSV лежат в `data/`. Закрытый CSV можно скачать по Google Drive id:
 
-- [scikit-build-core](https://scikit-build-core.readthedocs.io/) — конфигурация
-  задаётся в `pyproject.toml`, а backend вызывает CMake для сборки расширения.
-- [pybind11 CMake helpers](https://pybind11.readthedocs.io/en/stable/cmake/) —
-  `pybind11_add_module` создаёт Python extension module и подключает нужные
-  Python-заголовки и флаги.
-- [CMake GoogleTest module](https://cmake.org/cmake/help/latest/module/GoogleTest.html) —
-  `gtest_discover_tests` регистрирует тесты из собранного исполняемого файла и
-  удобен для CTest.
+```powershell
+uv run python scripts/download_dataset.py <file_id> data/third_dataset.csv
+```
+
+То же из Python:
+
+```python
+import optlib
+
+optlib.download("<file_id>", "data/third_dataset.csv")
+```

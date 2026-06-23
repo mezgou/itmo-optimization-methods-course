@@ -1,51 +1,54 @@
 # Документация optlib
 
-`optlib` — учебная библиотека оптимизации на C++23 с Python-биндингами. Код
-и API называются по-английски, а учебные материалы ведутся на русском языке.
+`optlib` - библиотека оптимизации на C++23 с Python-пакетом `optlib` и
+расширением `_optlib` на pybind11. C++ ядро содержит собственные реализации
+линейной алгебры, дифференцирования, оптимизаторов и небольшой MLP для бинарной
+классификации. Python слой нужен для воспроизводимых экспериментов, графиков,
+работы с CSV-датасетами и ноутбуками.
+
+Документация описывает текущее устройство проекта, а не историю разработки.
+Код, имена API и идентификаторы остаются на английском; пояснения написаны на
+русском.
 
 ## Разделы
 
-- [Начало работы](getting-started.md) — установка, сборка и общий stage-gate.
-- [Архитектура](architecture.md) — слои C++ ядра, биндингов и Python-пакета.
-- [Линейная алгебра](linalg.md) — собственные контейнеры `Vector`/`Matrix` и
-  горячие операции.
-- [Дифференцирование](differentiation.md) — конечные разности и выбор шага.
-- [Автодифференцирование](autograd.md) — multidual forward-mode AD.
-- [Тестовые функции](functions.md) — Розенброк и аналитические производные.
-- [Оптимизаторы](optimizers.md) — методы первого порядка и траектории.
-- [Бенчмарки](benchmarks.md) — воспроизводимые измерения и внешние эталоны.
-- [Нейронная сеть](neural-network.md) — MLP, BCE, backprop и flat parameters.
-- [Датасеты](datasets.md) — d1/d2/d3, загрузка, preprocessing и F1.
-- [Справочник API](api-reference.md) — публичные функции Python-пакета.
+- [Начало работы](getting-started.md): установка, сборка, тесты, запуск ноутбуков.
+- [Сборочная система](build-system.md): pyproject, scikit-build-core, CMake options.
+- [Архитектура](architecture.md): слои проекта, ownership данных, GIL, структура каталогов.
+- [Справочник API](api-reference.md): публичные функции `optlib` и возвращаемые структуры.
+- [Линейная алгебра](linalg.md): `Vector`, `Matrix`, BLAS-подобные операции ядра.
+- [Численное дифференцирование](differentiation.md): конечные разности и выбор шага.
+- [Автоматическое дифференцирование](autograd.md): forward-mode dual numbers.
+- [Тестовые функции](functions.md): Rosenbrock, Rastrigin, Himmelblau, Ackley, DesmosSurface и другие.
+- [Оптимизаторы](optimizers.md): методы первого, второго и нулевого порядка.
+- [Нейронная сеть](neural-network.md): бинарная MLP, BCE, backprop, F1.
+- [Датасеты](datasets.md): CSV-формат, d1/d2, закрытый d3, стандартизация и оценка.
+- [Бенчмарки и отчеты](benchmarks.md): методика сравнений, notebooks, внешние baseline.
 
-## Артефакты лабораторной 1
+## Основные артефакты
 
-- `notebooks/first_lab.ipynb` строит траектории оптимизаторов на функции
-  Розенброка, графики сходимости, сравнение схем дифференцирования и мини-бенч
-  против `scipy.optimize`.
-- `.agents/defense/lab1.md` содержит сценарий защиты и ссылки на эти разделы.
-  Папка `.agents/` остается локальной и не коммитится по правилам проекта.
+- `src/optlib/core/` - C++23 ядро без Eigen, BLAS, Boost и CUDA.
+- `src/optlib/bindings/Module.cpp` - pybind11-граница и преобразование NumPy массивов.
+- `python/optlib/` - Python wrappers, dataset pipeline, plotting и study helpers.
+- `tests/cpp/` - GoogleTest проверки ядра.
+- `tests/python/` - pytest проверки Python API и воспроизводимых сценариев.
+- `notebooks/first_lab.ipynb`, `second_lab.ipynb`, `third_lab.ipynb`, `fourth_lab.ipynb` -
+  готовые отчеты с графиками и таблицами.
+- `data/first_dataset.csv`, `data/second_dataset.csv` - открытые CSV-датасеты.
+- `scripts/download_dataset.py` - CLI для загрузки CSV по Google Drive id.
 
-## Артефакты лабораторной 2
+## Качество и воспроизводимость
 
-- `notebooks/second_lab.ipynb` сравнивает методы лабораторий 1-2 на Rosenbrock,
-  Rastrigin, Himmelblau, Ackley и DesmosSurface.
-- `docs/functions.md` описывает формулы, минимумы, размерности и гладкость
-  benchmark-функций.
-- `docs/benchmarks.md` фиксирует методологию multistart, метрики и SciPy
-  baseline.
+Перед публикацией изменений проверяются сборка расширения, Python-тесты, ruff и
+C++ тесты:
 
-## Артефакты лабораторной 3
+```powershell
+uv pip install -e . --no-build-isolation
+uv run pytest -q
+uv run ruff check .
+uv run ruff format --check .
+ctest --test-dir build
+```
 
-- `notebooks/third_lab.ipynb` обучает C++ MLP на d1/d2, сравнивает Adam и
-  HeavyBall, строит loss-кривые, confusion matrix и границу решений d1.
-- `docs/datasets.md` описывает загрузку d1/d2/d3, 80/20 split,
-  стандартизацию и F1.
-- `.agents/defense/lab3.md` содержит сценарий защиты и live-прогон d3.
-
-## Артефакты лабораторной 4
-
-- `notebooks/fourth_lab.ipynb` сравнивает оптимизаторы, schedules, stability по
-  seed, L2/init ablation и sklearn/PyTorch baseline для MLP.
-- `docs/neural-network.md` описывает MLP, backprop, weighted F1 и d3 fallback.
-- `.agents/defense/lab4.md` содержит сценарий защиты и d3-команды.
+Ноутбуки строятся из генераторов `notebooks/_build_*_lab.py`. Это удерживает
+единый стиль, фиксированные seed и повторяемую структуру отчетов.

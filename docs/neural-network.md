@@ -1,140 +1,129 @@
 # Нейронная сеть
 
-S6 добавляет минимальное C++ ядро для бинарной MLP-классификации. Этот слой
-нужен для лабораторий 3-4 и специально связан с уже реализованными
-оптимизаторами через плоский вектор параметров.
+`optlib` содержит компактную C++ MLP для бинарной классификации. Сеть обучается
+теми же first-order оптимизаторами, что и обычные objective-функции: MLP
+возвращает loss и flat gradient, а оптимизатор обновляет вектор параметров.
 
 ## Архитектура
 
-Текущая модель:
+Используется один скрытый слой:
 
-```text
-x -> Dense(input_dim, hidden_dim) -> activation -> Dense(hidden_dim, 1) -> sigmoid
-```
+$$
+x \to W_1 x + b_1 \to a \to W_2 a + b_2 \to p
+$$
 
-Параметры хранятся в одном `Vector`:
+Вероятность класса 1:
 
-```text
-[W1, b1, W2, b2]
-```
+$$
+p = \sigma(W_2 a + b_2)
+$$
 
-Размер:
+Число параметров:
 
-```text
-parameter_count = hidden_dim * input_dim + hidden_dim + hidden_dim + 1
-```
+$$
+N = h d + h + h + 1
+$$
 
-Такой формат позволяет передать сеть в `MinimizeFirstOrder`: objective
-возвращает BCE loss, а gradient callback заполняет градиент backprop по тому же
-плоскому layout.
+где $d$ - число признаков, $h$ - размер скрытого слоя.
 
-## Активации
+Поддерживаемые activation:
 
-Поддержаны:
+- `relu`;
+- `leaky_relu`;
+- `sigmoid`;
+- `tanh`.
 
-- ReLU;
-- LeakyReLU;
-- Sigmoid;
-- Tanh.
+Поддерживаемые initialization:
 
-Для скрытого слоя в тестах и baseline используется `tanh`, потому что он хорошо
-работает на XOR и небольших нормализованных табличных данных.
+- `xavier`;
+- `he`.
 
-## Loss и backprop
+## Loss
 
-Для бинарной классификации используется Binary Cross-Entropy:
+Binary Cross-Entropy:
 
-```text
-L = -(1/m) * sum_i [y_i*log(p_i) + (1 - y_i)*log(1 - p_i)]
-```
+$$
+L =
+-\frac{1}{m}
+\sum_{i=1}^{m}
+y_i \log p_i + (1 - y_i) \log(1 - p_i)
+$$
 
-Вероятность `p` считается стабильной sigmoid-функцией. В backprop для
-`sigmoid + BCE` выходная дельта упрощается:
+Для `sigmoid + BCE` дельта выходного слоя:
 
-```text
-delta = p - y
-```
+$$
+\delta = p - y
+$$
 
-Опциональный L2 штраф добавляется к loss и градиенту всех весовых параметров.
+L2-регуляризация добавляется к loss и градиенту весов.
 
-Для одного объекта с входом `x`, скрытым слоем `a = activation(W1 x + b1)` и
-логитом `z = W2 a + b2` backprop использует:
+## Backprop
 
-```text
-dW2 = (p - y) * a^T
-db2 = p - y
-da  = W2^T * (p - y)
-dW1 = (da * activation'(W1*x + b1)) * x^T
-db1 = da * activation'(W1*x + b1)
-```
+Для одного объекта:
 
-В реализации все `dW/db` накапливаются по batch и делятся на число объектов.
+$$
+dW_2 = (p - y) a^\top,\quad db_2 = p - y
+$$
 
-## Метрики
+$$
+da = W_2^\top (p - y)
+$$
 
-В S6 реализован `BinaryF1Score`. Python wrapper `MLPClassifier.score` возвращает
-F1, потому что именно F1 используется в критериях лабораторий 3-4.
+$$
+dW_1 = (da \odot a') x^\top,\quad db_1 = da \odot a'
+$$
 
-Для d1/d2 метрика бинарная. Для закрытого d3 структура заранее неизвестна:
-если target окажется multiclass, `studies.train_dataset_score` обучает
-one-vs-rest набор binary MLP и возвращает macro-F1. Это не меняет C++ ядро:
-оно остаётся быстрым бинарным building block, а multiclass fallback собирается
-на Python-уровне для отчёта и защиты.
+Градиенты накапливаются по batch и делятся на число объектов.
 
-## Python API
-
-Низкоуровневые функции:
+## Native API
 
 ```python
-params = optlib.InitializeBinaryMlpParameters(2, 8, seed=42)
-loss_grad = optlib.BinaryMlpLossAndGradient(params, X, y, 2, 8)
-proba = optlib.BinaryMlpPredictProba(params, X, 2, 8)
+count = optlib.BinaryMlpParameterCount(input_dim=4, hidden_dim=12)
+params = optlib.InitializeBinaryMlpParameters(4, 12, activation="tanh")
+loss = optlib.BinaryMlpLossAndGradient(params, x, y, 4, 12)
+probabilities = optlib.BinaryMlpPredictProba(params, x, 4, 12)
+f1 = optlib.BinaryF1Score(probabilities, y)
 ```
 
-Высокоуровневый wrapper:
+Полный training wrapper:
 
 ```python
-model = optlib.MLPClassifier(hidden_dim=8, learning_rate=0.05).fit(X, y)
-pred = model.predict(X)
-f1 = model.score(X, y)
+result = optlib.TrainBinaryMlp(
+    features,
+    targets,
+    hidden_dim=12,
+    method="adam",
+    learning_rate=0.03,
+)
 ```
 
-## Проверка градиента
+## Python classifier
 
-`tests/cpp/TestNeuralNetwork.cpp` сравнивает backprop-градиент с центральной
-конечной разностью по всем параметрам маленькой XOR-сети. Это защищает flat
-offset layout и формулы backprop от смещений индексов.
+```python
+model = optlib.MLPClassifier(
+    hidden_dim=12,
+    activation="tanh",
+    method="adam",
+    learning_rate=0.03,
+)
+model.fit(features, targets)
 
-## Лаборатория 3
-
-S7 добавляет Python pipeline вокруг C++ MLP:
-
-- `MLPClassifier.fit/predict/predict_proba/score`;
-- `train_binary_classifier(path, method=...)`;
-- `evaluate(model, path, standardizer)`;
-- стратифицированное 80/20 разбиение и стандартизацию признаков.
-
-Для d1/d2 baseline обучается минимум двумя оптимизаторами: Adam и HeavyBall.
-
-`TrainBinaryMlp` и `MLPClassifier` принимают LR schedules (`constant`, `step`,
-`exponential`, `cosine`) и warmup-параметры. При `log_trajectory=True`
-wrapper сохраняет `optimizer_result_`, из которого notebook строит кривые BCE
-по итерациям без повторной реализации обучения в Python.
-
-## Лаборатория 4
-
-В `fourth_lab.ipynb` проверяются:
-
-- все first-order оптимизаторы из лабораторий 1-2 на d1/d2;
-- устойчивость по seed для Adam, HeavyBall и Nesterov;
-- расписания `constant`, `step`, `exponential`, `cosine`, `cosine+warmup`;
-- L2 ablation и initialization ablation (`xavier` против `he`);
-- внешний baseline через `sklearn.MLPClassifier` и optional PyTorch;
-- сохранение/загрузка финальной binary-модели и weighted F1 для d1/d2/d3.
-
-Финальный конфиг в ноутбуке фиксируется явно:
-
-```text
-hidden_dim=16, method=adam, learning_rate=0.03,
-max_iter=5000, activation=tanh, initialization=xavier, l2=1e-4
+probabilities = model.predict_proba(features)
+labels = model.predict(features)
+score = model.score(features, targets)
 ```
+
+`score` возвращает F1. Параметры можно сохранить через
+`BinaryDatasetModel.save`, если используется pipeline из `datasets.py`.
+
+## Проверки
+
+Корректность backprop проверяется gradient checking:
+
+$$
+\frac{\partial L}{\partial \theta_i}
+\approx
+\frac{L(\theta + h e_i) - L(\theta - h e_i)}{2h}
+$$
+
+Отдельно проверяется обучение XOR и воспроизводимость при фиксированном seed.
