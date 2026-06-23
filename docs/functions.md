@@ -46,3 +46,114 @@ Rosenbrock:
 
 SciPy не является зависимостью C++ ядра. Он подключается только для
 экспериментальных сравнений через `uv sync --extra experiments`.
+
+## Rastrigin
+
+Многомерная функция Растригина выбрана как обязательная функция из списка
+классических тестовых задач:
+
+```text
+f(x) = 10 n + sum_i [x_i^2 - 10 cos(2 pi x_i)]
+```
+
+Глобальный минимум:
+
+```text
+x* = (0, ..., 0), f(x*) = 0
+```
+
+Поверхность сильно мультимодальная. Для локальных методов это стресс-тест на
+застревание в ближайшей яме, поэтому в исследовании важны multistart и доля
+успешных запусков, а не только один красивый старт.
+
+В `optlib` реализованы:
+
+- `RastriginValue(x)`;
+- `RastriginGradient(x)`;
+- `RastriginHessian(x)`;
+- `RastriginAutogradGradient(x)`.
+
+## Himmelblau
+
+Двумерная функция Химмельблау используется как гладкая поверхность с несколькими
+минимумами:
+
+```text
+f(x, y) = (x^2 + y - 11)^2 + (x + y^2 - 7)^2
+```
+
+Один из минимумов:
+
+```text
+(x*, y*) = (3, 2), f(x*, y*) = 0
+```
+
+Реализованы аналитические значение, градиент, гессиан и autograd-проверка:
+
+- `HimmelblauValue(x)`;
+- `HimmelblauGradient(x)`;
+- `HimmelblauHessian(x)`;
+- `HimmelblauAutogradGradient(x)`.
+
+## Ackley
+
+Ackley добавлена как гладкая ND-функция с почти плоскими областями вдали от
+минимума:
+
+```text
+f(x) = -20 exp(-0.2 sqrt((1/n) sum_i x_i^2))
+       - exp((1/n) sum_i cos(2 pi x_i)) + 20 + e
+```
+
+Глобальный минимум:
+
+```text
+x* = (0, ..., 0), f(x*) = 0
+```
+
+Для неё доступны `AckleyValue(x)`, `AckleyGradient(x)` и
+`AckleyAutogradGradient(x)`. Гессиан намеренно не вынесен в публичный API:
+для лабораторного сравнения Newton/BFGS/L-BFGS достаточно аналитического
+градиента, а `BFGS`/`L-BFGS` строят кривизну по траектории.
+
+## DesmosSurface
+
+Функция из Desmos 3D берётся строго из контракта:
+
+```text
+z = d * [ ((x * (round(sin(10 y)) + 2))^2 + y - 10)^2
+        + (x + (y * (round(sin(7 x)) + 2))^2 - 7)^2 ]
+```
+
+`d > 0` масштабирует значения и по умолчанию равен `1.0`. Из-за
+`round(sin(...))` поверхность кусочно-гладкая и имеет разрывы на границах
+полос. Поэтому она рассматривается как black-box задача: основной честный
+инструмент — Nelder-Mead, Powell и coordinate search. Численный градиент
+доступен только для локальной диагностики внутри гладкого участка:
+
+- `DesmosSurfaceValue(x, scale=1.0)`;
+- `DesmosSurfaceNumericalGradient(x, scale=1.0, scheme="central")`.
+
+## Дополнительные функции
+
+Для расширенного исследования также доступны:
+
+- Beale: 2D, минимум `(3, 0.5)`;
+- Booth: 2D, минимум `(1, 3)`;
+- Styblinski-Tang: ND, минимум около `-2.903534` по каждой координате.
+
+Для них реализованы value/gradient/hessian и имена в Python-реестре:
+`"beale"`, `"booth"`, `"styblinski_tang"`.
+
+## Objective registry
+
+Для ноутбуков и сравнительных таблиц добавлен Python-реестр:
+
+```python
+objective = optlib.get_objective("rastrigin", dimension=10)
+rows = optlib.compare_methods(objective, x0, ["adam", "lbfgs", "nelder_mead"])
+```
+
+`Objective` хранит `value`, `gradient`, `hessian`, известный минимум и флаг
+`derivative_free`. Это один контракт для функций лабораторий 1-2 и будущих
+нейросетевых экспериментов.

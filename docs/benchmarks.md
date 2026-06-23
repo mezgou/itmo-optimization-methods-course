@@ -1,8 +1,8 @@
 # Бенчмарки
 
-Этот раздел фиксирует способ воспроизведения измерений. Полные сравнительные
-таблицы будут расширяться в следующих лабораторных, когда появятся методы
-нулевого порядка, методы второго порядка и нейросетевая часть.
+Этот раздел фиксирует способ воспроизведения измерений. Метрики строятся так,
+чтобы сравнивать не только итоговое значение, но и цену результата: число
+вычислений функции, градиента, гессиана и wall-clock время.
 
 ## Лабораторная 1
 
@@ -36,9 +36,76 @@ uv run jupyter notebook notebooks/first_lab.ipynb
 - `optlib.MinimizeRosenbrock` против `scipy.optimize.minimize` как внешнего
   эталона.
 
-## Ограничения измерений
+## Лабораторная 2
 
-`OptimizeResult` сейчас хранит число итераций, но не число вызовов функции и
-градиента. Поэтому для методов первого порядка в первой лабораторной честно
-сравниваются итоговое значение, норма градиента, число итераций и wall-clock
-время, а не `nfev`/`njev`.
+Для второй лабораторной используются функции:
+
+- Rosenbrock: гладкая узкая долина;
+- Rastrigin: мультимодальная ND-функция;
+- Himmelblau: 2D-гладкая функция с несколькими минимумами;
+- Ackley: ND-функция с плато;
+- DesmosSurface: разрывная black-box поверхность.
+
+Методы сравниваются по единой строке результата:
+
+- `value`;
+- `gradient_norm`, если градиент определён;
+- `iterations`;
+- `function_evaluations`;
+- `gradient_evaluations`;
+- `hessian_evaluations`;
+- `distance_to_minimum`, если минимум известен;
+- `converged`.
+
+Python-харнесс:
+
+```python
+objective = optlib.get_objective("rastrigin", dimension=10)
+rows = optlib.compare_methods(
+    objective,
+    x0,
+    ["adam", "lbfgs", "nelder_mead", "powell"],
+    max_iter=1000,
+    log_trajectory=False,
+)
+```
+
+Для измерений `optlib` harness использует native wrappers, а не Python
+callbacks:
+
+```python
+optlib.MinimizeBenchmarkFunction("rastrigin", x0, method="adam")
+optlib.MinimizeBenchmarkFunctionSecondOrder("ackley", x0, method="lbfgs")
+optlib.MinimizeBenchmarkFunctionZeroOrder("desmos_surface", x0, method="powell")
+```
+
+Так wall-clock сравнение не смешивает стоимость C++ оптимизатора со стоимостью
+перехода в Python на каждом вычислении функции.
+
+SciPy запускается только как экспериментальная зависимость:
+
+```python
+reference = optlib.scipy_minimize(objective, x0, method="BFGS")
+```
+
+Если SciPy не установлен, функция возвращает `None`, а ноутбук продолжает
+работать только с `optlib`.
+
+## Воспроизводимость
+
+Для multistart используется фиксированный seed. Размерности для ND-функций:
+
+```text
+n in {2, 10, 50, 100}
+```
+
+Для 2D-функций сохраняются траектории, чтобы строить контурные карты. Для
+масштабных ND-сравнений `log_trajectory=False`, иначе запись всех точек
+искажает измерение памяти и времени.
+
+Главный воспроизводимый отчет:
+
+```powershell
+uv sync --extra experiments --extra dev
+uv run jupyter notebook notebooks/second_lab.ipynb
+```

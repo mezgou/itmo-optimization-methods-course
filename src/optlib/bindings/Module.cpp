@@ -5,6 +5,7 @@
 #include <optlib/core/LinAlg.hpp>
 #include <optlib/core/OptimizeResult.hpp>
 #include <optlib/core/Version.hpp>
+#include <optlib/core/functions/BenchmarkFunctions.hpp>
 #include <optlib/core/functions/Rosenbrock.hpp>
 #include <optlib/core/optimizers/FirstOrder.hpp>
 #include <optlib/core/optimizers/SecondOrder.hpp>
@@ -231,6 +232,22 @@ py::dict OptimizeResultToDict(optlib::OptimizeResult result)
     return output;
 }
 
+py::dict BenchmarkFunctionInfoToDict(optlib::BenchmarkFunctionInfo info)
+{
+    py::dict output;
+    output["name"] = std::string(info.Name);
+    output["fixed_dimension"] = info.FixedDimension;
+    output["has_gradient"] = info.HasGradient;
+    output["has_hessian"] = info.HasHessian;
+    output["is_smooth"] = info.IsSmooth;
+    output["is_multimodal"] = info.IsMultimodal;
+    output["known_minimum"] = VectorToArray(std::move(info.KnownMinimum));
+    output["known_minimum_value"] = info.KnownMinimumValue;
+    output["suggested_lower_bound"] = info.SuggestedLowerBound;
+    output["suggested_upper_bound"] = info.SuggestedUpperBound;
+    return output;
+}
+
 py::array_t<double> PointArray(std::span<const double> values)
 {
     py::array_t<double> point(static_cast<py::ssize_t>(values.size()));
@@ -290,6 +307,40 @@ py::array_t<double> RosenbrockAutogradGradient(const Array& x)
         gradient = optlib::ComputeAutogradGradient(function, xValue.Span());
     }
     return VectorToArray(std::move(gradient));
+}
+
+double BenchmarkFunctionValueBinding(const std::string& name, const Array& x, double scale)
+{
+    auto xValue = VectorFromArray(x);
+    py::gil_scoped_release release;
+    return optlib::BenchmarkFunctionValue(name, xValue.Span(), scale);
+}
+
+py::array_t<double> BenchmarkFunctionGradientBinding(const std::string& name, const Array& x)
+{
+    auto xValue = VectorFromArray(x);
+    optlib::Vector gradient;
+    {
+        py::gil_scoped_release release;
+        gradient = optlib::BenchmarkFunctionGradient(name, xValue.Span());
+    }
+    return VectorToArray(std::move(gradient));
+}
+
+py::array_t<double> BenchmarkFunctionHessianBinding(const std::string& name, const Array& x)
+{
+    auto xValue = VectorFromArray(x);
+    optlib::Matrix hessian;
+    {
+        py::gil_scoped_release release;
+        hessian = optlib::BenchmarkFunctionHessian(name, xValue.Span());
+    }
+    return MatrixToArray(std::move(hessian));
+}
+
+py::dict BenchmarkFunctionInfoBinding(const std::string& name, std::size_t dimension)
+{
+    return BenchmarkFunctionInfoToDict(optlib::GetBenchmarkFunctionInfo(name, dimension));
 }
 
 py::dict MinimizeRosenbrockBinding(const Array& x0,
@@ -406,6 +457,71 @@ py::dict MinimizeBinding(const py::function& valueFunction,
     return OptimizeResultToDict(std::move(result));
 }
 
+py::dict MinimizeBenchmarkFunctionBinding(const std::string& functionName,
+                                          const Array& x0,
+                                          const std::string& method,
+                                          double learningRate,
+                                          std::size_t maxIter,
+                                          double gradientTolerance,
+                                          double stepTolerance,
+                                          double functionTolerance,
+                                          double momentum,
+                                          double beta1,
+                                          double beta2,
+                                          double epsilon,
+                                          bool logTrajectory,
+                                          const std::string& schedule,
+                                          double learningRateGamma,
+                                          std::size_t learningRateStepSize,
+                                          double learningRateDecay,
+                                          double minimumLearningRate,
+                                          std::size_t warmupSteps,
+                                          std::size_t scheduleIterations,
+                                          double scale)
+{
+    auto xValue = VectorFromArray(x0);
+    auto info = optlib::GetBenchmarkFunctionInfo(functionName, xValue.Size());
+    if (!info.HasGradient) {
+        throw std::invalid_argument("Benchmark function gradient is not available");
+    }
+    auto config = MakeFirstOrderConfig(learningRate,
+                                       maxIter,
+                                       gradientTolerance,
+                                       stepTolerance,
+                                       functionTolerance,
+                                       momentum,
+                                       beta1,
+                                       beta2,
+                                       epsilon,
+                                       logTrajectory,
+                                       schedule,
+                                       learningRateGamma,
+                                       learningRateStepSize,
+                                       learningRateDecay,
+                                       minimumLearningRate,
+                                       warmupSteps,
+                                       scheduleIterations);
+    auto valueFunction = [&functionName, scale](std::span<const double> values) {
+        return optlib::BenchmarkFunctionValue(functionName, values, scale);
+    };
+    auto gradientFunction = [&functionName](std::span<const double> values,
+                                            std::span<double> gradient) {
+        auto gradientValue = optlib::BenchmarkFunctionGradient(functionName, values);
+        optlib::Copy(gradientValue.Span(), gradient);
+    };
+
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeFirstOrder(valueFunction,
+                                            gradientFunction,
+                                            xValue.Span(),
+                                            optlib::ParseFirstOrderMethod(method),
+                                            config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
 py::dict MinimizeRosenbrockSecondOrderBinding(const Array& x0,
                                               const std::string& method,
                                               std::size_t maxIter,
@@ -435,6 +551,68 @@ py::dict MinimizeRosenbrockSecondOrderBinding(const Array& x0,
         py::gil_scoped_release release;
         result = optlib::MinimizeRosenbrockSecondOrder(
             xValue.Span(), optlib::ParseSecondOrderMethod(method), config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
+py::dict MinimizeBenchmarkFunctionSecondOrderBinding(const std::string& functionName,
+                                                     const Array& x0,
+                                                     const std::string& method,
+                                                     std::size_t maxIter,
+                                                     double gradientTolerance,
+                                                     double stepTolerance,
+                                                     double functionTolerance,
+                                                     std::size_t historySize,
+                                                     double hessianDamping,
+                                                     const std::string& lineSearch,
+                                                     double lineSearchInitialStep,
+                                                     double lineSearchReduction,
+                                                     bool logTrajectory,
+                                                     double scale)
+{
+    auto xValue = VectorFromArray(x0);
+    auto info = optlib::GetBenchmarkFunctionInfo(functionName, xValue.Size());
+    if (!info.HasGradient) {
+        throw std::invalid_argument("Benchmark function gradient is not available");
+    }
+    auto parsedMethod = optlib::ParseSecondOrderMethod(method);
+    if (parsedMethod == optlib::SecondOrderMethod::Newton && !info.HasHessian) {
+        throw std::invalid_argument("Newton requires an available benchmark Hessian");
+    }
+    auto config = MakeSecondOrderConfig(maxIter,
+                                        gradientTolerance,
+                                        stepTolerance,
+                                        functionTolerance,
+                                        historySize,
+                                        hessianDamping,
+                                        lineSearch,
+                                        lineSearchInitialStep,
+                                        lineSearchReduction,
+                                        logTrajectory);
+    auto valueFunction = [&functionName, scale](std::span<const double> values) {
+        return optlib::BenchmarkFunctionValue(functionName, values, scale);
+    };
+    auto gradientFunction = [&functionName](std::span<const double> values,
+                                            std::span<double> gradient) {
+        auto gradientValue = optlib::BenchmarkFunctionGradient(functionName, values);
+        optlib::Copy(gradientValue.Span(), gradient);
+    };
+    optlib::HessianFunction hessianFunction;
+    if (info.HasHessian) {
+        hessianFunction = [&functionName](std::span<const double> values, optlib::Matrix& hessian) {
+            hessian = optlib::BenchmarkFunctionHessian(functionName, values);
+        };
+    }
+
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeSecondOrder(valueFunction,
+                                             gradientFunction,
+                                             hessianFunction,
+                                             xValue.Span(),
+                                             parsedMethod,
+                                             config);
     }
     return OptimizeResultToDict(std::move(result));
 }
@@ -565,6 +743,38 @@ py::dict MinimizeZeroOrderBinding(const py::function& valueFunction,
         py::gil_scoped_release release;
         result = optlib::MinimizeZeroOrder(
             wrappedValueFunction, xValue.Span(), optlib::ParseZeroOrderMethod(method), config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
+py::dict MinimizeBenchmarkFunctionZeroOrderBinding(const std::string& functionName,
+                                                   const Array& x0,
+                                                   const std::string& method,
+                                                   std::size_t maxIter,
+                                                   double stepTolerance,
+                                                   double functionTolerance,
+                                                   double initialStep,
+                                                   double lineSearchRadius,
+                                                   double lineSearchTolerance,
+                                                   bool logTrajectory,
+                                                   double scale)
+{
+    auto xValue = VectorFromArray(x0);
+    auto config = MakeZeroOrderConfig(maxIter,
+                                      stepTolerance,
+                                      functionTolerance,
+                                      initialStep,
+                                      lineSearchRadius,
+                                      lineSearchTolerance,
+                                      logTrajectory);
+    auto valueFunction = [&functionName, scale](std::span<const double> values) {
+        return optlib::BenchmarkFunctionValue(functionName, values, scale);
+    };
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeZeroOrder(
+            valueFunction, xValue.Span(), optlib::ParseZeroOrderMethod(method), config);
     }
     return OptimizeResultToDict(std::move(result));
 }
@@ -724,6 +934,253 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("scheme") = "central", py::arg("step") = 0.0);
     moduleHandle.def("RosenbrockAutogradGradient", &RosenbrockAutogradGradient, py::arg("x"));
     moduleHandle.def("RosenbrockGradientAutograd", &RosenbrockAutogradGradient, py::arg("x"));
+    moduleHandle.def(
+        "RastriginValue",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            py::gil_scoped_release release;
+            return optlib::RastriginValue(xSpan);
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "RastriginGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::RastriginGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "RastriginHessian",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Matrix hessian;
+            {
+                py::gil_scoped_release release;
+                hessian = optlib::RastriginHessian(xSpan);
+            }
+            return MatrixToArray(std::move(hessian));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "RastriginAutogradGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::RastriginAutogradGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "HimmelblauValue",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            py::gil_scoped_release release;
+            return optlib::HimmelblauValue(xSpan);
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "HimmelblauGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::HimmelblauGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "HimmelblauHessian",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Matrix hessian;
+            {
+                py::gil_scoped_release release;
+                hessian = optlib::HimmelblauHessian(xSpan);
+            }
+            return MatrixToArray(std::move(hessian));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "HimmelblauAutogradGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::HimmelblauAutogradGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "AckleyValue",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            py::gil_scoped_release release;
+            return optlib::AckleyValue(xSpan);
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "AckleyGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::AckleyGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "AckleyAutogradGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::AckleyAutogradGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "BealeValue",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            py::gil_scoped_release release;
+            return optlib::BealeValue(xSpan);
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "BealeGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::BealeGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "BealeHessian",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Matrix hessian;
+            {
+                py::gil_scoped_release release;
+                hessian = optlib::BealeHessian(xSpan);
+            }
+            return MatrixToArray(std::move(hessian));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "BoothValue",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            py::gil_scoped_release release;
+            return optlib::BoothValue(xSpan);
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "BoothGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::BoothGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "BoothHessian",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Matrix hessian;
+            {
+                py::gil_scoped_release release;
+                hessian = optlib::BoothHessian(xSpan);
+            }
+            return MatrixToArray(std::move(hessian));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "StyblinskiTangValue",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            py::gil_scoped_release release;
+            return optlib::StyblinskiTangValue(xSpan);
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "StyblinskiTangGradient",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::StyblinskiTangGradient(xSpan);
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "StyblinskiTangHessian",
+        [](const Array& x) {
+            auto xSpan = VectorSpan(x);
+            optlib::Matrix hessian;
+            {
+                py::gil_scoped_release release;
+                hessian = optlib::StyblinskiTangHessian(xSpan);
+            }
+            return MatrixToArray(std::move(hessian));
+        },
+        py::arg("x"));
+    moduleHandle.def(
+        "DesmosSurfaceValue",
+        [](const Array& x, double scale) {
+            auto xSpan = VectorSpan(x);
+            py::gil_scoped_release release;
+            return optlib::DesmosSurfaceValue(xSpan, scale);
+        },
+        py::arg("x"),
+        py::arg("scale") = 1.0);
+    moduleHandle.def(
+        "DesmosSurfaceNumericalGradient",
+        [](const Array& x, double scale, const std::string& scheme) {
+            auto xSpan = VectorSpan(x);
+            optlib::Vector gradient;
+            {
+                py::gil_scoped_release release;
+                gradient = optlib::DesmosSurfaceNumericalGradient(xSpan, scale, ParseScheme(scheme));
+            }
+            return VectorToArray(std::move(gradient));
+        },
+        py::arg("x"),
+        py::arg("scale") = 1.0,
+        py::arg("scheme") = "central");
+    moduleHandle.def("BenchmarkFunctionInfo", &BenchmarkFunctionInfoBinding, py::arg("name"),
+                     py::arg("dimension") = 2);
+    moduleHandle.def("BenchmarkFunctionValue", &BenchmarkFunctionValueBinding, py::arg("name"),
+                     py::arg("x"), py::arg("scale") = 1.0);
+    moduleHandle.def("BenchmarkFunctionGradient", &BenchmarkFunctionGradientBinding,
+                     py::arg("name"), py::arg("x"));
+    moduleHandle.def("BenchmarkFunctionHessian", &BenchmarkFunctionHessianBinding, py::arg("name"),
+                     py::arg("x"));
     moduleHandle.def("NumericGradient", &NumericGradient, py::arg("function"), py::arg("x"),
                      py::arg("scheme") = "central", py::arg("step") = 0.0);
     moduleHandle.def("MinimizeRosenbrock", &MinimizeRosenbrockBinding, py::arg("x0"),
@@ -751,6 +1208,19 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("learning_rate_decay") = 1e-3,
                      py::arg("minimum_learning_rate") = 0.0, py::arg("warmup_steps") = 0,
                      py::arg("schedule_iterations") = 0);
+    moduleHandle.def("MinimizeBenchmarkFunction", &MinimizeBenchmarkFunctionBinding,
+                     py::arg("function_name"), py::arg("x0"), py::arg("method") = "adam",
+                     py::arg("learning_rate") = 1e-3, py::arg("max_iter") = 10000,
+                     py::arg("gradient_tolerance") = 1e-6,
+                     py::arg("step_tolerance") = 1e-12,
+                     py::arg("function_tolerance") = 1e-12, py::arg("momentum") = 0.9,
+                     py::arg("beta1") = 0.9, py::arg("beta2") = 0.999,
+                     py::arg("epsilon") = 1e-8, py::arg("log_trajectory") = true,
+                     py::arg("schedule") = "constant", py::arg("learning_rate_gamma") = 0.5,
+                     py::arg("learning_rate_step_size") = 100,
+                     py::arg("learning_rate_decay") = 1e-3,
+                     py::arg("minimum_learning_rate") = 0.0, py::arg("warmup_steps") = 0,
+                     py::arg("schedule_iterations") = 0, py::arg("scale") = 1.0);
     moduleHandle.def("MinimizeRosenbrockSecondOrder", &MinimizeRosenbrockSecondOrderBinding,
                      py::arg("x0"), py::arg("method") = "bfgs", py::arg("max_iter") = 1000,
                      py::arg("gradient_tolerance") = 1e-6,
@@ -774,6 +1244,17 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("line_search_reduction") = 0.5,
                      py::arg("hessian_function") = py::none(),
                      py::arg("log_trajectory") = true);
+    moduleHandle.def("MinimizeBenchmarkFunctionSecondOrder",
+                     &MinimizeBenchmarkFunctionSecondOrderBinding, py::arg("function_name"),
+                     py::arg("x0"), py::arg("method") = "lbfgs", py::arg("max_iter") = 1000,
+                     py::arg("gradient_tolerance") = 1e-6,
+                     py::arg("step_tolerance") = 1e-12,
+                     py::arg("function_tolerance") = 1e-12, py::arg("history_size") = 10,
+                     py::arg("hessian_damping") = 1e-6,
+                     py::arg("line_search") = "strong_wolfe",
+                     py::arg("line_search_initial_step") = 1.0,
+                     py::arg("line_search_reduction") = 0.5,
+                     py::arg("log_trajectory") = true, py::arg("scale") = 1.0);
     moduleHandle.def("MinimizeRosenbrockZeroOrder", &MinimizeRosenbrockZeroOrderBinding,
                      py::arg("x0"), py::arg("method") = "nelder_mead",
                      py::arg("max_iter") = 2000, py::arg("step_tolerance") = 1e-8,
@@ -788,4 +1269,12 @@ PYBIND11_MODULE(_optlib, moduleHandle)
                      py::arg("line_search_radius") = 1.0,
                      py::arg("line_search_tolerance") = 1e-6,
                      py::arg("log_trajectory") = true);
+    moduleHandle.def("MinimizeBenchmarkFunctionZeroOrder",
+                     &MinimizeBenchmarkFunctionZeroOrderBinding, py::arg("function_name"),
+                     py::arg("x0"), py::arg("method") = "nelder_mead",
+                     py::arg("max_iter") = 2000, py::arg("step_tolerance") = 1e-8,
+                     py::arg("function_tolerance") = 1e-10, py::arg("initial_step") = 1.0,
+                     py::arg("line_search_radius") = 1.0,
+                     py::arg("line_search_tolerance") = 1e-6,
+                     py::arg("log_trajectory") = true, py::arg("scale") = 1.0);
 }

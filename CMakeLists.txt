@@ -17,12 +17,14 @@ set(PYBIND11_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(extends/pybind11)
 
 add_library(optlib_core STATIC src/optlib/core/Differentiation.cpp
+                               src/optlib/core/functions/BenchmarkFunctions.cpp
                                src/optlib/core/optimizers/FirstOrder.cpp
                                src/optlib/core/optimizers/LineSearch.cpp
                                src/optlib/core/optimizers/SecondOrder.cpp
                                src/optlib/core/optimizers/ZeroOrder.cpp
                                src/optlib/core/schedulers/LearningRate.cpp
-                               src/optlib/core/functions/Rosenbrock.cpp)
+                               src/optlib/core/functions/Rosenbrock.cpp
+                               src/optlib/core/functions/BenchmarkFunctions.cpp)
 target_include_directories(
     optlib_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
                        $<INSTALL_INTERFACE:include>)
@@ -65,6 +67,7 @@ if(OPTLIB_BUILD_TESTS)
     add_executable(
         optlib_cpp_tests
         tests/cpp/TestSmoke.cpp tests/cpp/TestCoreMath.cpp tests/cpp/TestFirstOrder.cpp
+        tests/cpp/TestBenchmarkFunctions.cpp
         tests/cpp/TestSchedulers.cpp tests/cpp/TestLineSearch.cpp tests/cpp/TestSecondOrder.cpp
         tests/cpp/TestZeroOrder.cpp)
     target_link_libraries(optlib_cpp_tests PRIVATE optlib_core GTest::gtest_main)

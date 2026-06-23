@@ -142,11 +142,12 @@ OptimizeResult MinimizeSecondOrder(const ValueFunction& valueFunction,
     std::deque<Vector> yHistory;
     std::deque<double> rhoHistory;
 
-    auto currentValue = valueFunction(current.Span());
-    gradientFunction(current.Span(), gradient.Span());
-    auto gradientNorm = Norm2(gradient);
-
     OptimizeResult result;
+    auto currentValue = valueFunction(current.Span());
+    ++result.FunctionEvaluations;
+    gradientFunction(current.Span(), gradient.Span());
+    ++result.GradientEvaluations;
+    auto gradientNorm = Norm2(gradient);
     result.Path = Trajectory(dimension);
     if (config.StoreTrajectory) {
         result.Path.Reserve(config.Criteria.MaxIterations + 1);
@@ -161,6 +162,7 @@ OptimizeResult MinimizeSecondOrder(const ValueFunction& valueFunction,
 
         if (method == SecondOrderMethod::Newton) {
             hessianFunction(current.Span(), hessian);
+            ++result.HessianEvaluations;
             for (std::size_t index = 0; index < dimension; ++index) {
                 hessian.At(index, index) += config.HessianDamping;
                 rhs[index] = -gradient[index];
@@ -214,7 +216,9 @@ OptimizeResult MinimizeSecondOrder(const ValueFunction& valueFunction,
 
         AddScaled(current.Span(), step, direction.Span(), next.Span());
         auto nextValue = valueFunction(next.Span());
+        ++result.FunctionEvaluations;
         gradientFunction(next.Span(), nextGradient.Span());
+        ++result.GradientEvaluations;
         Difference(next.Span(), current.Span(), sVector.Span());
         Difference(nextGradient.Span(), gradient.Span(), yVector.Span());
         auto yDotS = Dot(yVector, sVector);

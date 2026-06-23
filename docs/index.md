@@ -22,3 +22,12 @@
   против `scipy.optimize`.
 - `.agents/defense/lab1.md` содержит сценарий защиты и ссылки на эти разделы.
   Папка `.agents/` остается локальной и не коммитится по правилам проекта.
+
+## Артефакты лабораторной 2
+
+- `notebooks/second_lab.ipynb` сравнивает методы лабораторий 1-2 на Rosenbrock,
+  Rastrigin, Himmelblau, Ackley и DesmosSurface.
+- `docs/functions.md` описывает формулы, минимумы, размерности и гладкость
+  benchmark-функций.
+- `docs/benchmarks.md` фиксирует методологию multistart, метрики и SciPy
+  baseline.

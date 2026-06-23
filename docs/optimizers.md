@@ -232,3 +232,24 @@ optlib.MinimizeRosenbrockZeroOrder(x0, method="coordinate_search")
 
 - https://docs.scipy.org/doc/scipy/reference/optimize.minimize-neldermead.html
 - https://docs.scipy.org/doc/scipy/reference/optimize.minimize-powell.html
+
+## Сравнительный запуск в лабораторной 2
+
+Для экспериментов методы запускаются через общий Python-харнесс:
+
+```python
+objective = optlib.get_objective("ackley", dimension=10)
+rows = optlib.compare_methods(
+    objective,
+    x0,
+    ["adam", "rmsprop", "lbfgs", "nelder_mead", "powell"],
+    max_iter=1000,
+    log_trajectory=False,
+)
+```
+
+Для гладких функций используются методы первого и второго порядка. Для
+`DesmosSurface`, где поверхность разрывна из-за `round(sin(...))`, основное
+сравнение ведётся по методам нулевого порядка. Численный градиент этой
+поверхности используется только как диагностический локальный инструмент, а не
+как математическая гарантия гладкости.
