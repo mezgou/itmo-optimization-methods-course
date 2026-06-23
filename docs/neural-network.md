@@ -20,9 +20,10 @@ x -> Dense(input_dim, hidden_dim) -> activation -> Dense(hidden_dim, 1) -> sigmo
 
 Размер:
 
-```text
-hidden_dim * input_dim + hidden_dim + hidden_dim + 1
-```
+$$
+\text{parameter_count}
+=h\cdot d+h+h+1
+$$
 
 Такой формат позволяет передать сеть в `MinimizeFirstOrder`: objective
 возвращает BCE loss, а gradient callback заполняет градиент backprop по тому же
@@ -44,29 +45,40 @@ hidden_dim * input_dim + hidden_dim + hidden_dim + 1
 
 Для бинарной классификации используется Binary Cross-Entropy:
 
-```text
-L = - mean[y log(p) + (1 - y) log(1 - p)]
-```
+$$
+L=-\frac{1}{m}\sum_{i=1}^{m}\left[
+y_i\log p_i+(1-y_i)\log(1-p_i)
+\right]
+$$
 
 Вероятность `p` считается стабильной sigmoid-функцией. В backprop для
 `sigmoid + BCE` выходная дельта упрощается:
 
-```text
-delta = p - y
-```
+$$
+\delta=p-y
+$$
 
 Опциональный L2 штраф добавляется к loss и градиенту всех весовых параметров.
 
 Для одного объекта с входом `x`, скрытым слоем `a = activation(W1 x + b1)` и
 логитом `z = W2 a + b2` backprop использует:
 
-```text
-dW2 = (p - y) a^T
-db2 = p - y
-da  = W2^T (p - y)
-dW1 = (da * activation'(W1 x + b1)) x^T
-db1 = da * activation'(W1 x + b1)
-```
+$$
+\frac{\partial L}{\partial W_2}=(p-y)a^T,\qquad
+\frac{\partial L}{\partial b_2}=p-y
+$$
+
+$$
+\frac{\partial L}{\partial a}=W_2^T(p-y)
+$$
+
+$$
+\frac{\partial L}{\partial W_1}
+=\left(\frac{\partial L}{\partial a}\odot \sigma'(W_1x+b_1)\right)x^T,
+\qquad
+\frac{\partial L}{\partial b_1}
+=\frac{\partial L}{\partial a}\odot \sigma'(W_1x+b_1)
+$$
 
 В реализации все `dW/db` накапливаются по batch и делятся на число объектов.
 
