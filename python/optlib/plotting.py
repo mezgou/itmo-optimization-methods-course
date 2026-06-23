@@ -12,16 +12,16 @@ from typing import Any
 
 import numpy as np
 
-# A calm, high-contrast categorical palette reused across every notebook.
+# Compact categorical palette reused across every notebook.
 PALETTE: tuple[str, ...] = (
     "#2563eb",  # blue
+    "#059669",  # green
     "#dc2626",  # red
-    "#16a34a",  # green
-    "#9333ea",  # purple
-    "#ea580c",  # orange
+    "#7c3aed",  # violet
+    "#d97706",  # amber
     "#0891b2",  # cyan
-    "#ca8a04",  # gold
-    "#db2777",  # pink
+    "#be123c",  # rose
+    "#4b5563",  # gray
 )
 
 
@@ -32,23 +32,26 @@ def use_notebook_style() -> None:
 
     plt.rcParams.update(
         {
-            "figure.figsize": (11.0, 6.0),
-            "figure.dpi": 110,
-            "savefig.dpi": 110,
+            "figure.figsize": (9.5, 5.2),
+            "figure.dpi": 120,
+            "savefig.dpi": 120,
             "figure.autolayout": True,
-            "font.size": 11,
-            "axes.titlesize": 13,
-            "axes.titleweight": "bold",
-            "axes.labelsize": 11,
+            "font.size": 10,
+            "axes.titlesize": 11,
+            "axes.titleweight": "semibold",
+            "axes.labelsize": 10,
             "axes.grid": True,
-            "grid.alpha": 0.25,
+            "grid.alpha": 0.16,
             "grid.linestyle": "--",
+            "grid.linewidth": 0.7,
             "axes.spines.top": False,
             "axes.spines.right": False,
             "axes.prop_cycle": plt.cycler(color=list(PALETTE)),
             "image.cmap": "viridis",
             "legend.frameon": False,
-            "lines.linewidth": 1.8,
+            "legend.fontsize": 8.5,
+            "lines.linewidth": 1.45,
+            "lines.markersize": 4,
         }
     )
 
@@ -94,14 +97,14 @@ def plot_contours(
         levels = np.geomspace(low, high, 24)
     else:
         levels = 24
-    contour = axis.contourf(grid_x, grid_y, grid_z, levels=levels, cmap="viridis", alpha=0.85)
-    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.3, alpha=0.4)
+    contour = axis.contourf(grid_x, grid_y, grid_z, levels=levels, cmap="viridis", alpha=0.82)
+    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.25, alpha=0.32)
     if trajectory is not None and len(trajectory) > 0:
         trajectory = np.asarray(trajectory, dtype=np.float64)
-        axis.plot(trajectory[:, 0], trajectory[:, 1], color="#dc2626", linewidth=1.4, marker=".")
-        axis.plot(trajectory[0, 0], trajectory[0, 1], "o", color="white", markersize=7, mec="black")
+        axis.plot(trajectory[:, 0], trajectory[:, 1], color="#dc2626", linewidth=1.2, marker=".")
+        axis.plot(trajectory[0, 0], trajectory[0, 1], "o", color="white", markersize=5, mec="black")
         axis.plot(
-            trajectory[-1, 0], trajectory[-1, 1], "*", color="gold", markersize=15, mec="black"
+            trajectory[-1, 0], trajectory[-1, 1], "*", color="#f59e0b", markersize=12, mec="black"
         )
     axis.set_title(title)
     axis.set_xlabel("x")
@@ -127,22 +130,28 @@ def plot_trajectories(
     )
     low = max(float(np.nanmin(grid_z)), 1e-6)
     high = max(float(np.nanmax(grid_z)), low * 10.0)
-    levels = np.geomspace(low, high, 30)
+    levels = np.geomspace(low, high, 24)
     contour = axis.contourf(grid_x, grid_y, grid_z, levels=levels, cmap="viridis", alpha=0.8)
-    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.25, alpha=0.35)
+    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.22, alpha=0.3)
     for index, (name, result) in enumerate(results.items()):
         path = np.asarray(result["trajectory"]["x"], dtype=np.float64)
         color = PALETTE[index % len(PALETTE)]
-        axis.plot(path[:, 0], path[:, 1], color=color, linewidth=1.6, label=name, marker="")
-        axis.plot(path[0, 0], path[0, 1], "o", color=color, markersize=5, mec="black")
+        axis.plot(path[:, 0], path[:, 1], color=color, linewidth=1.3, label=name, marker="")
+        axis.plot(path[0, 0], path[0, 1], "o", color=color, markersize=4, mec="black")
     if minimum is not None:
         axis.plot(
-            minimum[0], minimum[1], "*", color="gold", markersize=16, mec="black", label="минимум"
+            minimum[0],
+            minimum[1],
+            "*",
+            color="#f59e0b",
+            markersize=13,
+            mec="black",
+            label="минимум",
         )
     axis.set_title(title)
     axis.set_xlabel("x")
     axis.set_ylabel("y")
-    axis.legend(loc="upper right", fontsize=9)
+    axis.legend(loc="upper right")
     return contour
 
 
@@ -165,7 +174,7 @@ def plot_convergence(
     axis.set_title(title)
     axis.set_xlabel("итерация")
     axis.set_ylabel(ylabel or ("f(x)" if key == "f" else "‖∇f(x)‖"))
-    axis.legend(fontsize=9)
+    axis.legend()
 
 
 def plot_surface3d(
@@ -185,7 +194,7 @@ def plot_surface3d(
     )
     axis = figure.add_subplot(position, projection="3d")
     axis.plot_surface(
-        grid_x, grid_y, grid_z, cmap="viridis", linewidth=0, antialiased=True, alpha=0.95
+        grid_x, grid_y, grid_z, cmap="viridis", linewidth=0, antialiased=True, alpha=0.92
     )
     axis.set_title(title)
     axis.set_xlabel("x")
@@ -215,7 +224,7 @@ def plot_confusion_matrix(
                 ha="center",
                 va="center",
                 color="white" if data[i, j] > threshold else "black",
-                fontsize=13,
+                fontsize=11,
                 fontweight="bold",
             )
     axis.set_xticks(range(len(labels)))
@@ -250,14 +259,14 @@ def plot_decision_boundary(
     )
     mesh = np.column_stack([grid_x.ravel(), grid_y.ravel()])
     probabilities = np.asarray(predict_proba(mesh), dtype=np.float64).reshape(grid_x.shape)
-    axis.contourf(grid_x, grid_y, probabilities, levels=20, cmap="RdBu_r", alpha=0.75)
-    axis.contour(grid_x, grid_y, probabilities, levels=[0.5], colors="black", linewidths=1.2)
+    axis.contourf(grid_x, grid_y, probabilities, levels=18, cmap="RdBu_r", alpha=0.68)
+    axis.contour(grid_x, grid_y, probabilities, levels=[0.5], colors="black", linewidths=1.0)
     for label, color in ((0, "#2563eb"), (1, "#dc2626")):
         mask = targets.astype(np.int64) == label
         axis.scatter(
             features[mask, 0],
             features[mask, 1],
-            s=14,
+            s=12,
             color=color,
             edgecolor="white",
             linewidth=0.4,
@@ -275,7 +284,7 @@ def bar_comparison(
     *,
     title: str = "",
     ylabel: str = "",
-    annotate: bool = True,
+    annotate: bool = False,
     highlight_max: bool = True,
 ) -> None:
     """Render a styled bar chart, optionally highlighting the best bar."""
@@ -295,7 +304,7 @@ def bar_comparison(
                 f"{value:.3f}",
                 ha="center",
                 va="bottom",
-                fontsize=9,
+                fontsize=8,
             )
     axis.set_title(title)
     axis.set_ylabel(ylabel)
