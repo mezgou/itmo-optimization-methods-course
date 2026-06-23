@@ -14,14 +14,14 @@ import numpy as np
 
 # Compact categorical palette reused across every notebook.
 PALETTE: tuple[str, ...] = (
-    "#2563eb",  # blue
-    "#059669",  # green
-    "#dc2626",  # red
-    "#7c3aed",  # violet
-    "#d97706",  # amber
-    "#0891b2",  # cyan
-    "#be123c",  # rose
-    "#4b5563",  # gray
+    "#2f5d7c",  # muted blue
+    "#3f8f7f",  # teal
+    "#b45f4d",  # terracotta
+    "#7467a8",  # violet
+    "#c0903d",  # ochre
+    "#8d5578",  # mauve
+    "#5f7f4f",  # olive
+    "#5f6472",  # graphite
 )
 
 
@@ -36,18 +36,20 @@ def use_notebook_style() -> None:
             "figure.dpi": 120,
             "savefig.dpi": 120,
             "figure.autolayout": True,
+            "figure.facecolor": "white",
+            "axes.facecolor": "white",
             "font.size": 10,
             "axes.titlesize": 11,
             "axes.titleweight": "semibold",
             "axes.labelsize": 10,
             "axes.grid": True,
-            "grid.alpha": 0.16,
-            "grid.linestyle": "--",
-            "grid.linewidth": 0.7,
+            "grid.alpha": 0.10,
+            "grid.linestyle": "-",
+            "grid.linewidth": 0.55,
             "axes.spines.top": False,
             "axes.spines.right": False,
             "axes.prop_cycle": plt.cycler(color=list(PALETTE)),
-            "image.cmap": "viridis",
+            "image.cmap": "cividis",
             "legend.frameon": False,
             "legend.fontsize": 8.5,
             "lines.linewidth": 1.45,
@@ -97,14 +99,14 @@ def plot_contours(
         levels = np.geomspace(low, high, 24)
     else:
         levels = 24
-    contour = axis.contourf(grid_x, grid_y, grid_z, levels=levels, cmap="viridis", alpha=0.82)
-    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.25, alpha=0.32)
+    contour = axis.contourf(grid_x, grid_y, grid_z, levels=levels, cmap="cividis", alpha=0.82)
+    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.2, alpha=0.24)
     if trajectory is not None and len(trajectory) > 0:
         trajectory = np.asarray(trajectory, dtype=np.float64)
-        axis.plot(trajectory[:, 0], trajectory[:, 1], color="#dc2626", linewidth=1.2, marker=".")
+        axis.plot(trajectory[:, 0], trajectory[:, 1], color=PALETTE[2], linewidth=1.2, marker=".")
         axis.plot(trajectory[0, 0], trajectory[0, 1], "o", color="white", markersize=5, mec="black")
         axis.plot(
-            trajectory[-1, 0], trajectory[-1, 1], "*", color="#f59e0b", markersize=12, mec="black"
+            trajectory[-1, 0], trajectory[-1, 1], "*", color=PALETTE[4], markersize=12, mec="black"
         )
     axis.set_title(title)
     axis.set_xlabel("x")
@@ -131,8 +133,8 @@ def plot_trajectories(
     low = max(float(np.nanmin(grid_z)), 1e-6)
     high = max(float(np.nanmax(grid_z)), low * 10.0)
     levels = np.geomspace(low, high, 24)
-    contour = axis.contourf(grid_x, grid_y, grid_z, levels=levels, cmap="viridis", alpha=0.8)
-    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.22, alpha=0.3)
+    contour = axis.contourf(grid_x, grid_y, grid_z, levels=levels, cmap="cividis", alpha=0.78)
+    axis.contour(grid_x, grid_y, grid_z, levels=levels, colors="white", linewidths=0.18, alpha=0.22)
     for index, (name, result) in enumerate(results.items()):
         path = np.asarray(result["trajectory"]["x"], dtype=np.float64)
         color = PALETTE[index % len(PALETTE)]
@@ -143,7 +145,7 @@ def plot_trajectories(
             minimum[0],
             minimum[1],
             "*",
-            color="#f59e0b",
+            color=PALETTE[4],
             markersize=13,
             mec="black",
             label="минимум",
@@ -194,7 +196,7 @@ def plot_surface3d(
     )
     axis = figure.add_subplot(position, projection="3d")
     axis.plot_surface(
-        grid_x, grid_y, grid_z, cmap="viridis", linewidth=0, antialiased=True, alpha=0.92
+        grid_x, grid_y, grid_z, cmap="cividis", linewidth=0, antialiased=True, alpha=0.90
     )
     axis.set_title(title)
     axis.set_xlabel("x")
@@ -213,7 +215,7 @@ def plot_confusion_matrix(
     """Render a small annotated confusion-matrix heatmap."""
 
     data = np.asarray(matrix, dtype=np.int64)
-    image = axis.imshow(data, cmap="Blues")
+    image = axis.imshow(data, cmap="PuBuGn")
     threshold = data.max() / 2.0 if data.max() else 0.5
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
@@ -259,9 +261,9 @@ def plot_decision_boundary(
     )
     mesh = np.column_stack([grid_x.ravel(), grid_y.ravel()])
     probabilities = np.asarray(predict_proba(mesh), dtype=np.float64).reshape(grid_x.shape)
-    axis.contourf(grid_x, grid_y, probabilities, levels=18, cmap="RdBu_r", alpha=0.68)
-    axis.contour(grid_x, grid_y, probabilities, levels=[0.5], colors="black", linewidths=1.0)
-    for label, color in ((0, "#2563eb"), (1, "#dc2626")):
+    axis.contourf(grid_x, grid_y, probabilities, levels=18, cmap="BrBG", alpha=0.56)
+    axis.contour(grid_x, grid_y, probabilities, levels=[0.5], colors="#222222", linewidths=0.9)
+    for label, color in ((0, PALETTE[0]), (1, PALETTE[2])):
         mask = targets.astype(np.int64) == label
         axis.scatter(
             features[mask, 0],
@@ -294,8 +296,8 @@ def bar_comparison(
     colors = [PALETTE[i % len(PALETTE)] for i in range(len(labels))]
     if highlight_max and values.size:
         best = int(np.nanargmax(values))
-        colors[best] = "#16a34a"
-    bars = axis.bar(labels, values, color=colors)
+        colors[best] = PALETTE[1]
+    bars = axis.bar(labels, values, color=colors, width=0.62, alpha=0.92)
     if annotate:
         for bar, value in zip(bars, values, strict=True):
             axis.text(
@@ -308,4 +310,6 @@ def bar_comparison(
             )
     axis.set_title(title)
     axis.set_ylabel(ylabel)
+    axis.grid(axis="x", visible=False)
+    axis.grid(axis="y", alpha=0.10)
     axis.tick_params(axis="x", rotation=30)
