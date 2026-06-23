@@ -159,6 +159,7 @@ labels = model.predict(features)
 - `train_binary_classifier(path, ...)`
 - `train_binary_dataset(path, ...)`
 - `evaluate(model, path, standardizer=None)`
+- `evaluate_saved_model(model_path, dataset_path)`
 - `run_lab3_experiment(path, ...)`
 - `classification_metrics(predictions, targets)`
 - `binary_metrics(probabilities, targets, threshold=0.5)`
@@ -172,9 +173,20 @@ labels = model.predict(features)
 
 - `compare_nn_optimizers(path, methods=None, schedule="constant", ...)`
 - `regularization_ablation(path, l2_values=None, ...)`
+- `initialization_ablation(path, initializations=None, ...)`
+- `optimizer_stability(path, methods=None, seeds=None, ...)`
 - `sklearn_mlp_baseline(path, ...)`
+- `torch_mlp_baseline(path, ...)`
+- `train_dataset_score(path, ...)`
+- `weighted_f1_score(paths, weights=None, ...)`
 
-Если `scikit-learn` не установлен, `sklearn_mlp_baseline` возвращает `None`.
+Если `scikit-learn` или `torch` не установлены, соответствующие baseline-функции
+возвращают `None`.
+
+`train_dataset_score` использует native binary MLP для бинарных CSV. Если в
+target больше двух классов, функция обучает one-vs-rest набор binary MLP и
+возвращает macro-F1; это нужно для закрытого d3 с заранее неизвестным числом
+классов.
 
 ## Экспериментальные обертки
 

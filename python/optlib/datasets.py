@@ -60,7 +60,16 @@ class BinaryDatasetModel:
     classes: np.ndarray | None = None
 
     def transform(self, features: np.ndarray) -> np.ndarray:
-        return (np.asarray(features, dtype=np.float64) - self.mean) / self.std
+        feature_array = np.asarray(features, dtype=np.float64)
+        if feature_array.ndim != 2:
+            raise ValueError("features must be a 2D array")
+        if feature_array.shape[1] != self.mean.size:
+            msg = (
+                f"model expects {self.mean.size} features, "
+                f"but dataset contains {feature_array.shape[1]}"
+            )
+            raise ValueError(msg)
+        return (feature_array - self.mean) / self.std
 
     def predict_proba(self, features: np.ndarray) -> np.ndarray:
         return self.classifier.predict_proba(self.transform(features))
@@ -81,6 +90,8 @@ class BinaryDatasetModel:
 
         self.classifier._require_fitted()
         destination = Path(path)
+        if destination.suffix != ".npz":
+            destination = Path(f"{destination}.npz")
         destination.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
             destination,
@@ -432,6 +443,13 @@ def load_binary_dataset_model(path: str | Path) -> BinaryDatasetModel:
     """Load a model saved by BinaryDatasetModel.save."""
 
     return BinaryDatasetModel.load(path)
+
+
+def evaluate_saved_model(model_path: str | Path, dataset_path: str | Path) -> dict[str, Any]:
+    """Load a saved binary model and evaluate it on a target-last CSV dataset."""
+
+    model = load_binary_dataset_model(model_path)
+    return model.evaluate_path(dataset_path)
 
 
 def run_lab3_experiment(

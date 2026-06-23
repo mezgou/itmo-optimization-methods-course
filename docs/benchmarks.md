@@ -109,9 +109,11 @@ n in {2, 10, 50, 100}
 таблицам:
 
 - optimizer: GD, HeavyBall, Nesterov, Adam, RMSProp, Adagrad;
-- schedule: constant/cosine и при необходимости step/exponential;
+- stability: F1/loss по нескольким seed для Adam, HeavyBall, Nesterov;
+- schedule: constant, step, exponential, cosine и cosine+warmup;
 - регуляризация: набор L2 значений;
-- внешний baseline: `sklearn.MLPClassifier`, если установлен.
+- initialization: Xavier против He;
+- внешний baseline: `sklearn.MLPClassifier` и optional PyTorch baseline.
 
 Запуск:
 
@@ -123,14 +125,16 @@ rows = optlib.compare_nn_optimizers(
 )
 ```
 
-Для d3 используется тот же `evaluate(model, path, standardizer)`, чтобы
-preprocessing не отличался от d1/d2.
+Для d3 есть два режима. Если закрытый CSV совместим по числу признаков с
+сохранённой binary-моделью, используется `evaluate(model, path)` с тем же
+preprocessing. Если структура другая или d3 окажется multiclass, итоговая
+таблица использует `studies.weighted_f1_score` и one-vs-rest macro-F1 fallback.
 
 Главный воспроизводимый отчет:
 
 ```powershell
 uv sync --extra experiments --extra dev
-uv run jupyter notebook notebooks/second_lab.ipynb
+uv run jupyter notebook notebooks/fourth_lab.ipynb
 ```
 
 ## Контрольный запуск S9

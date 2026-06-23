@@ -91,8 +91,14 @@ def test_binary_dataset_model_save_load(tmp_path: Path) -> None:
     path = model.save(tmp_path / "model.npz")
     loaded = optlib.load_binary_dataset_model(path)
     evaluated = loaded.evaluate_path(ROOT / "data" / "first_dataset.csv")
+    evaluated_from_path = optlib.evaluate_saved_model(path, ROOT / "data" / "first_dataset.csv")
 
     assert evaluated["f1"] > 0.8
+    assert evaluated_from_path["f1"] > 0.8
+
+    suffixless_path = model.save(tmp_path / "model_without_suffix")
+    assert suffixless_path.name == "model_without_suffix.npz"
+    assert suffixless_path.exists()
 
 
 def test_train_binary_classifier_on_second_dataset() -> None:

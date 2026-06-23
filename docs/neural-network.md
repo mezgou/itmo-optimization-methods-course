@@ -57,10 +57,29 @@ delta = p - y
 
 Опциональный L2 штраф добавляется к loss и градиенту всех весовых параметров.
 
+Для одного объекта с входом `x`, скрытым слоем `a = activation(W1 x + b1)` и
+логитом `z = W2 a + b2` backprop использует:
+
+```text
+dW2 = (p - y) a^T
+db2 = p - y
+da  = W2^T (p - y)
+dW1 = (da * activation'(W1 x + b1)) x^T
+db1 = da * activation'(W1 x + b1)
+```
+
+В реализации все `dW/db` накапливаются по batch и делятся на число объектов.
+
 ## Метрики
 
 В S6 реализован `BinaryF1Score`. Python wrapper `MLPClassifier.score` возвращает
 F1, потому что именно F1 используется в критериях лабораторий 3-4.
+
+Для d1/d2 метрика бинарная. Для закрытого d3 структура заранее неизвестна:
+если target окажется multiclass, `studies.train_dataset_score` обучает
+one-vs-rest набор binary MLP и возвращает macro-F1. Это не меняет C++ ядро:
+оно остаётся быстрым бинарным building block, а multiclass fallback собирается
+на Python-уровне для отчёта и защиты.
 
 ## Python API
 
@@ -101,3 +120,21 @@ S7 добавляет Python pipeline вокруг C++ MLP:
 `exponential`, `cosine`) и warmup-параметры. При `log_trajectory=True`
 wrapper сохраняет `optimizer_result_`, из которого notebook строит кривые BCE
 по итерациям без повторной реализации обучения в Python.
+
+## Лаборатория 4
+
+В `fourth_lab.ipynb` проверяются:
+
+- все first-order оптимизаторы из лабораторий 1-2 на d1/d2;
+- устойчивость по seed для Adam, HeavyBall и Nesterov;
+- расписания `constant`, `step`, `exponential`, `cosine`, `cosine+warmup`;
+- L2 ablation и initialization ablation (`xavier` против `he`);
+- внешний baseline через `sklearn.MLPClassifier` и optional PyTorch;
+- сохранение/загрузка финальной binary-модели и weighted F1 для d1/d2/d3.
+
+Финальный конфиг в ноутбуке фиксируется явно:
+
+```text
+hidden_dim=16, method=adam, learning_rate=0.03,
+max_iter=5000, activation=tanh, initialization=xavier, l2=1e-4
+```

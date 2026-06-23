@@ -54,9 +54,11 @@ uv run jupyter notebook notebooks/first_lab.ipynb
 
 Для первичной настройки использованы официальные материалы:
 
-- scikit-build-core: конфигурация задаётся в `pyproject.toml`, а backend вызывает
-  CMake для сборки расширения.
-- pybind11: CMake-функция `pybind11_add_module` создаёт Python extension module и
-  подключает нужные Python-заголовки и флаги.
-- CMake GoogleTest: `gtest_discover_tests` регистрирует тесты из собранного
-  исполняемого файла и удобен для CTest.
+- [scikit-build-core](https://scikit-build-core.readthedocs.io/) — конфигурация
+  задаётся в `pyproject.toml`, а backend вызывает CMake для сборки расширения.
+- [pybind11 CMake helpers](https://pybind11.readthedocs.io/en/stable/cmake/) —
+  `pybind11_add_module` создаёт Python extension module и подключает нужные
+  Python-заголовки и флаги.
+- [CMake GoogleTest module](https://cmake.org/cmake/help/latest/module/GoogleTest.html) —
+  `gtest_discover_tests` регистрирует тесты из собранного исполняемого файла и
+  удобен для CTest.

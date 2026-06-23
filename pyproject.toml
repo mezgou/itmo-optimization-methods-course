@@ -19,6 +19,10 @@ experiments = [
     "jupyter",
     "ipykernel",
     "gdown",
+    # jedi 0.20.0 ships a broken/empty package that crashes IPython kernel
+    # startup ("module 'jedi' has no attribute 'settings'") and blocks notebook
+    # execution; pin to the last known-good release for reproducible notebooks.
+    "jedi>=0.19.2,<0.20",
 ]
 dev = [
     "scikit-build-core>=0.10",

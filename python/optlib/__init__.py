@@ -89,6 +89,7 @@ from .datasets import (
     classification_metrics,
     download,
     evaluate,
+    evaluate_saved_model,
     fit_standardizer,
     load_binary_dataset_model,
     load_csv,
@@ -102,7 +103,16 @@ from .datasets import (
 )
 from .functions import Objective, get_objective, list_objectives
 from .nn import MLPClassifier, binary_mlp_loss_and_gradient, make_two_moons, make_xor
-from .studies import compare_nn_optimizers, regularization_ablation, sklearn_mlp_baseline
+from .studies import (
+    compare_nn_optimizers,
+    initialization_ablation,
+    optimizer_stability,
+    regularization_ablation,
+    sklearn_mlp_baseline,
+    torch_mlp_baseline,
+    train_dataset_score,
+    weighted_f1_score,
+)
 
 __version__ = Version()
 __all__ = [
@@ -189,6 +199,7 @@ __all__ = [
     "compare_methods",
     "download",
     "evaluate",
+    "evaluate_saved_model",
     "fit_standardizer",
     "get_objective",
     "list_objectives",
@@ -205,6 +216,11 @@ __all__ = [
     "scipy_minimize",
     "regularization_ablation",
     "sklearn_mlp_baseline",
+    "initialization_ablation",
+    "optimizer_stability",
+    "torch_mlp_baseline",
+    "train_dataset_score",
+    "weighted_f1_score",
     "stratified_indices",
     "stratified_split",
     "train_binary_classifier",

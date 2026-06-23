@@ -45,7 +45,7 @@
 
 ## Артефакты лабораторной 4
 
-- `notebooks/fourth_lab.ipynb` сравнивает оптимизаторы, schedules, L2 и
-  sklearn baseline для MLP.
-- `docs/neural-network.md` описывает S8 study helpers.
+- `notebooks/fourth_lab.ipynb` сравнивает оптимизаторы, schedules, stability по
+  seed, L2/init ablation и sklearn/PyTorch baseline для MLP.
+- `docs/neural-network.md` описывает MLP, backprop, weighted F1 и d3 fallback.
 - `.agents/defense/lab4.md` содержит сценарий защиты и d3-команды.

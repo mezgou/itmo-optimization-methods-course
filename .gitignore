@@ -6,6 +6,8 @@
 .vscode/
 
 # Build and packaging output
+.benchmarks/
+artifacts/
 build/
 dist/
 *.egg-info/

@@ -15,8 +15,13 @@ Python-пакет `optlib`.
   `Gemm`.
 - `Dual.hpp` — forward-mode multidual числа.
 - `Differentiation.hpp/.cpp` — численные градиенты и автодифференцирование.
-- `functions/Rosenbrock.*` — значение, градиент и гессиан Розенброка.
+- `functions/*.hpp/.cpp` — тестовые функции лабораторных 1-2: Rosenbrock,
+  Rastrigin, Himmelblau, Ackley, DesmosSurface, Beale, Booth,
+  Styblinski-Tang.
 - `optimizers/FirstOrder.*` — GD, HeavyBall, Nesterov, Adam, RMSProp, Adagrad.
+- `optimizers/SecondOrder.*` — Newton, BFGS, L-BFGS с line search.
+- `optimizers/ZeroOrder.*` — Nelder-Mead, Powell и coordinate search для
+  black-box поверхностей.
 - `nn/NeuralNetwork.*` — бинарная MLP с плоским вектором параметров.
 - `OptimizeResult.hpp` — результат оптимизации и отключаемая траектория.
 
@@ -33,16 +38,27 @@ Python-пакет `optlib`.
 ## Python API
 
 `python/optlib/__init__.py` реэкспортирует публичные функции из `_optlib`.
-Пакет собирается через scikit-build-core и CMake, поэтому обычный импорт:
+Чистый Python-слой содержит только экспериментальную инфраструктуру:
+реестр функций, графики, загрузку датасетов, study-функции и удобный класс
+`MLPClassifier` поверх нативной MLP. Пакет собирается через scikit-build-core
+и CMake, поэтому обычный импорт:
 
 ```python
 import optlib
 ```
 
-дает доступ к C++ реализации без отдельного Python-слоя с логикой.
+дает доступ к C++ реализации и воспроизводимым исследовательским оберткам.
 
-## Расширение в следующих лабораторных
+## Воспроизводимые артефакты
 
-Новые функции и оптимизаторы добавляются в C++ ядро и затем открываются через
-тот же pybind11-модуль. `OptimizeResult` и `Trajectory` уже являются общим
-контрактом для графиков, ноутбуков и будущих сравнительных стендов.
+Ноутбуки `notebooks/first_lab.ipynb`, `notebooks/second_lab.ipynb`,
+`notebooks/third_lab.ipynb` и `notebooks/fourth_lab.ipynb` генерируются из
+скриптов `_build_*_lab.py`. Это сохраняет единый стиль, повторяемые seed и
+позволяет быстро пересобрать ноутбуки после изменения API.
+
+Все лабораторные используют общий контракт результатов: `OptimizeResult`,
+`trajectory`, таблицы `pandas.DataFrame` и функции из `optlib.plotting`.
+Для закрытого d3 предусмотрены два режима: прямое применение сохраненной
+бинарной модели, если формат совпадает с обучающим датасетом, и независимая
+оценка через `studies.weighted_f1_score`, если d3 имеет другую размерность или
+несколько классов.

@@ -39,7 +39,9 @@ uv run python scripts/download_dataset.py <file_id> <dest>
 
 `train_binary_classifier` обучает `MLPClassifier`, а `evaluate(model, path,
 standardizer)` прогоняет уже обученную модель на target-last CSV. Это же
-используется для закрытого d3.
+используется для закрытого d3, если его число признаков совпадает с сохранённой
+binary-моделью. При несовпадении размерности `BinaryDatasetModel.transform`
+выдаёт явную ошибку вместо неявного broadcasting.
 
 Для экспериментов доступны отдельные строительные блоки:
 
@@ -50,6 +52,12 @@ standardizer)` прогоняет уже обученную модель на ta
 - `run_lab3_experiment(paths)` — табличный прогон Adam/HeavyBall по d1/d2;
 - `BinaryDatasetModel.save(path)` и `load_binary_dataset_model(path)` —
   сохранение весов MLP вместе с mean/std для live-прогона d3.
+- `evaluate_saved_model(model_path, dataset_path)` — загрузка сохранённой модели
+  и оценка target-last CSV одним вызовом;
+- `studies.weighted_f1_score({"d1": ..., "d2": ..., "d3": ...})` — итоговая
+  формула `0.3F1(d1)+0.3F1(d2)+0.4F1(d3)` для доступных датасетов;
+- `studies.train_dataset_score(path)` — binary F1 для бинарного CSV и
+  one-vs-rest macro-F1 fallback для возможного multiclass d3.
 
 `train_binary_classifier` также принимает параметры `activation`,
 `initialization`, `l2` и `schedule`, поэтому в лабораторной 4 тот же pipeline
@@ -59,5 +67,6 @@ learning rate.
 ## Метрики
 
 Основная метрика — F1. Также считаются accuracy, precision, recall и confusion
-matrix. Для d1/d2 используется бинарный F1; multiclass d3 будет расширен в S8,
-если закрытый набор окажется многоклассовым.
+matrix. Для d1/d2 используется бинарный F1. Для возможного multiclass d3 Python
+study layer использует one-vs-rest поверх той же binary MLP и считает macro-F1;
+это отражено в итоговых ячейках `third_lab.ipynb` и `fourth_lab.ipynb`.
