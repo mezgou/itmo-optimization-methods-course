@@ -3,8 +3,10 @@
 
 #include <optlib/core/Differentiation.hpp>
 #include <optlib/core/LinAlg.hpp>
+#include <optlib/core/OptimizeResult.hpp>
 #include <optlib/core/Version.hpp>
 #include <optlib/core/functions/Rosenbrock.hpp>
+#include <optlib/core/optimizers/FirstOrder.hpp>
 
 #include <cstddef>
 #include <span>
@@ -71,6 +73,18 @@ py::array_t<double> MatrixToArray(optlib::Matrix values)
         owner);
 }
 
+py::array_t<double> SpanToVectorArray(std::span<const double> values)
+{
+    return VectorToArray(optlib::Vector(values));
+}
+
+py::array_t<double> SpanToMatrixArray(std::size_t rows,
+                                      std::size_t cols,
+                                      std::span<const double> values)
+{
+    return MatrixToArray(optlib::Matrix(rows, cols, values));
+}
+
 optlib::DifferentiationScheme ParseScheme(const std::string& scheme)
 {
     if (scheme == "forward") {
@@ -85,6 +99,63 @@ optlib::DifferentiationScheme ParseScheme(const std::string& scheme)
     throw std::invalid_argument("Unknown differentiation scheme");
 }
 
+optlib::FirstOrderConfig MakeFirstOrderConfig(double learningRate,
+                                              std::size_t maxIter,
+                                              double gradientTolerance,
+                                              double stepTolerance,
+                                              double functionTolerance,
+                                              double momentum,
+                                              double beta1,
+                                              double beta2,
+                                              double epsilon,
+                                              bool logTrajectory)
+{
+    optlib::FirstOrderConfig config;
+    config.LearningRate = learningRate;
+    config.Momentum = momentum;
+    config.Beta1 = beta1;
+    config.Beta2 = beta2;
+    config.Epsilon = epsilon;
+    config.StoreTrajectory = logTrajectory;
+    config.Criteria.MaxIterations = maxIter;
+    config.Criteria.GradientTolerance = gradientTolerance;
+    config.Criteria.StepTolerance = stepTolerance;
+    config.Criteria.FunctionTolerance = functionTolerance;
+    return config;
+}
+
+py::dict TrajectoryToDict(const optlib::Trajectory& path)
+{
+    py::dict output;
+    output["x"] = SpanToMatrixArray(path.Size(), path.Dimension(), path.Points());
+    output["f"] = SpanToVectorArray(path.Values());
+    output["grad_norm"] = SpanToVectorArray(path.GradientNorms());
+    output["time_ms"] = SpanToVectorArray(path.TimesMs());
+    return output;
+}
+
+py::dict OptimizeResultToDict(optlib::OptimizeResult result)
+{
+    py::dict output;
+    output["x"] = VectorToArray(std::move(result.X));
+    output["value"] = result.Value;
+    output["gradient_norm"] = result.GradientNorm;
+    output["iterations"] = result.Iterations;
+    output["converged"] = result.Converged;
+    output["trajectory"] = TrajectoryToDict(result.Path);
+    return output;
+}
+
+py::array_t<double> PointArray(std::span<const double> values)
+{
+    py::array_t<double> point(static_cast<py::ssize_t>(values.size()));
+    auto mutablePoint = point.mutable_unchecked<1>();
+    for (py::ssize_t index = 0; index < mutablePoint.shape(0); ++index) {
+        mutablePoint(index) = values[static_cast<std::size_t>(index)];
+    }
+    return point;
+}
+
 py::array_t<double> NumericGradient(const py::function& function,
                                     const Array& x,
                                     const std::string& scheme,
@@ -94,12 +165,7 @@ py::array_t<double> NumericGradient(const py::function& function,
     auto options = optlib::DifferentiationOptions{.Scheme = ParseScheme(scheme), .Step = step};
     auto wrappedFunction = [&function](std::span<const double> values) {
         py::gil_scoped_acquire acquire;
-        py::array_t<double> point(static_cast<py::ssize_t>(values.size()));
-        auto mutablePoint = point.mutable_unchecked<1>();
-        for (py::ssize_t index = 0; index < mutablePoint.shape(0); ++index) {
-            mutablePoint(index) = values[static_cast<std::size_t>(index)];
-        }
-        return function(point).cast<double>();
+        return function(PointArray(values)).cast<double>();
     };
 
     optlib::Vector gradient;
@@ -141,6 +207,92 @@ py::array_t<double> RosenbrockAutogradGradient(const Array& x)
     return VectorToArray(std::move(gradient));
 }
 
+py::dict MinimizeRosenbrockBinding(const Array& x0,
+                                   const std::string& method,
+                                   double learningRate,
+                                   std::size_t maxIter,
+                                   double gradientTolerance,
+                                   double stepTolerance,
+                                   double functionTolerance,
+                                   double momentum,
+                                   double beta1,
+                                   double beta2,
+                                   double epsilon,
+                                   bool logTrajectory)
+{
+    auto xValue = VectorFromArray(x0);
+    auto config = MakeFirstOrderConfig(learningRate,
+                                       maxIter,
+                                       gradientTolerance,
+                                       stepTolerance,
+                                       functionTolerance,
+                                       momentum,
+                                       beta1,
+                                       beta2,
+                                       epsilon,
+                                       logTrajectory);
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeRosenbrock(
+            xValue.Span(), optlib::ParseFirstOrderMethod(method), config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
+py::dict MinimizeBinding(const py::function& valueFunction,
+                         const py::function& gradientFunction,
+                         const Array& x0,
+                         const std::string& method,
+                         double learningRate,
+                         std::size_t maxIter,
+                         double gradientTolerance,
+                         double stepTolerance,
+                         double functionTolerance,
+                         double momentum,
+                         double beta1,
+                         double beta2,
+                         double epsilon,
+                         bool logTrajectory)
+{
+    auto xValue = VectorFromArray(x0);
+    auto config = MakeFirstOrderConfig(learningRate,
+                                       maxIter,
+                                       gradientTolerance,
+                                       stepTolerance,
+                                       functionTolerance,
+                                       momentum,
+                                       beta1,
+                                       beta2,
+                                       epsilon,
+                                       logTrajectory);
+    auto wrappedValueFunction = [&valueFunction](std::span<const double> values) {
+        py::gil_scoped_acquire acquire;
+        return valueFunction(PointArray(values)).cast<double>();
+    };
+    auto wrappedGradientFunction = [&gradientFunction](std::span<const double> values,
+                                                       std::span<double> gradient) {
+        py::gil_scoped_acquire acquire;
+        auto gradientArray = gradientFunction(PointArray(values)).cast<Array>();
+        auto gradientSpan = VectorSpan(gradientArray);
+        if (gradientSpan.size() != gradient.size()) {
+            throw std::invalid_argument("Python gradient returned an unexpected shape");
+        }
+        optlib::Copy(gradientSpan, gradient);
+    };
+
+    optlib::OptimizeResult result;
+    {
+        py::gil_scoped_release release;
+        result = optlib::MinimizeFirstOrder(wrappedValueFunction,
+                                            wrappedGradientFunction,
+                                            xValue.Span(),
+                                            optlib::ParseFirstOrderMethod(method),
+                                            config);
+    }
+    return OptimizeResultToDict(std::move(result));
+}
+
 } // namespace
 
 PYBIND11_MODULE(_optlib, moduleHandle)
@@ -152,6 +304,14 @@ PYBIND11_MODULE(_optlib, moduleHandle)
         .value("Forward", optlib::DifferentiationScheme::Forward)
         .value("Central", optlib::DifferentiationScheme::Central)
         .value("FivePoint", optlib::DifferentiationScheme::FivePoint)
+        .export_values();
+    py::enum_<optlib::FirstOrderMethod>(moduleHandle, "FirstOrderMethod")
+        .value("GradientDescent", optlib::FirstOrderMethod::GradientDescent)
+        .value("HeavyBall", optlib::FirstOrderMethod::HeavyBall)
+        .value("Nesterov", optlib::FirstOrderMethod::Nesterov)
+        .value("Adam", optlib::FirstOrderMethod::Adam)
+        .value("RMSProp", optlib::FirstOrderMethod::RMSProp)
+        .value("Adagrad", optlib::FirstOrderMethod::Adagrad)
         .export_values();
 
     moduleHandle.def("Version", []() { return std::string(optlib::Version()); });
@@ -264,4 +424,19 @@ PYBIND11_MODULE(_optlib, moduleHandle)
     moduleHandle.def("RosenbrockGradientAutograd", &RosenbrockAutogradGradient, py::arg("x"));
     moduleHandle.def("NumericGradient", &NumericGradient, py::arg("function"), py::arg("x"),
                      py::arg("scheme") = "central", py::arg("step") = 0.0);
+    moduleHandle.def("MinimizeRosenbrock", &MinimizeRosenbrockBinding, py::arg("x0"),
+                     py::arg("method") = "adam", py::arg("learning_rate") = 1e-3,
+                     py::arg("max_iter") = 10000, py::arg("gradient_tolerance") = 1e-6,
+                     py::arg("step_tolerance") = 1e-12,
+                     py::arg("function_tolerance") = 1e-12, py::arg("momentum") = 0.9,
+                     py::arg("beta1") = 0.9, py::arg("beta2") = 0.999,
+                     py::arg("epsilon") = 1e-8, py::arg("log_trajectory") = true);
+    moduleHandle.def("Minimize", &MinimizeBinding, py::arg("value_function"),
+                     py::arg("gradient_function"), py::arg("x0"), py::arg("method") = "adam",
+                     py::arg("learning_rate") = 1e-3, py::arg("max_iter") = 10000,
+                     py::arg("gradient_tolerance") = 1e-6,
+                     py::arg("step_tolerance") = 1e-12,
+                     py::arg("function_tolerance") = 1e-12, py::arg("momentum") = 0.9,
+                     py::arg("beta1") = 0.9, py::arg("beta2") = 0.999,
+                     py::arg("epsilon") = 1e-8, py::arg("log_trajectory") = true);
 }

@@ -17,6 +17,7 @@ set(PYBIND11_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(extends/pybind11)
 
 add_library(optlib_core STATIC src/optlib/core/Differentiation.cpp
+                               src/optlib/core/optimizers/FirstOrder.cpp
                                src/optlib/core/functions/Rosenbrock.cpp)
 target_include_directories(
     optlib_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
@@ -57,7 +58,8 @@ if(OPTLIB_BUILD_TESTS)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     add_subdirectory(extends/googletest EXCLUDE_FROM_ALL)
 
-    add_executable(optlib_cpp_tests tests/cpp/TestSmoke.cpp tests/cpp/TestCoreMath.cpp)
+    add_executable(optlib_cpp_tests tests/cpp/TestSmoke.cpp tests/cpp/TestCoreMath.cpp
+                                  tests/cpp/TestFirstOrder.cpp)
     target_link_libraries(optlib_cpp_tests PRIVATE optlib_core GTest::gtest_main)
     target_compile_features(optlib_cpp_tests PRIVATE cxx_std_23)
     if(MSVC)
