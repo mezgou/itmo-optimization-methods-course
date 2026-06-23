@@ -132,3 +132,24 @@ preprocessing не отличался от d1/d2.
 uv sync --extra experiments --extra dev
 uv run jupyter notebook notebooks/second_lab.ipynb
 ```
+
+## Контрольный запуск S9
+
+Финальный C++ микробенчмарк запускался из Release-сборки на Windows через
+`std::chrono::steady_clock`. В `CoreBench.cpp` зафиксированы `DIMENSION = 256`
+и `REPEATS = 25`, ниже приведена медиана по повторам:
+
+```powershell
+.\build\Release\optlib_core_bench.exe
+```
+
+| benchmark | median_us |
+| --- | ---: |
+| `Dot256x1000` | 0.6 |
+| `Gemv256` | 55.9 |
+| `CentralGradient256` | 246.9 |
+| `AutogradGradient256` | 1710.8 |
+
+Эти числа нужны как быстрая проверка производительности ядра. Для отчетных
+сравнений с SciPy/sklearn следует запускать ноутбуки, потому что они фиксируют
+не только время, но и итоговое качество, число вычислений и устойчивость метода.

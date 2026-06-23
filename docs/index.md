@@ -16,6 +16,7 @@
 - [Бенчмарки](benchmarks.md) — воспроизводимые измерения и внешние эталоны.
 - [Нейронная сеть](neural-network.md) — MLP, BCE, backprop и flat parameters.
 - [Датасеты](datasets.md) — d1/d2/d3, загрузка, preprocessing и F1.
+- [Справочник API](api-reference.md) — публичные функции Python-пакета.
 
 ## Артефакты лабораторной 1
 
@@ -33,6 +34,14 @@
   benchmark-функций.
 - `docs/benchmarks.md` фиксирует методологию multistart, метрики и SciPy
   baseline.
+
+## Артефакты лабораторной 3
+
+- `notebooks/third_lab.ipynb` обучает C++ MLP на d1/d2, сравнивает Adam и
+  HeavyBall, строит loss-кривые, confusion matrix и границу решений d1.
+- `docs/datasets.md` описывает загрузку d1/d2/d3, 80/20 split,
+  стандартизацию и F1.
+- `.agents/defense/lab3.md` содержит сценарий защиты и live-прогон d3.
 
 ## Артефакты лабораторной 4
 

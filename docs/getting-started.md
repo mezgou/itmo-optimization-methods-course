@@ -7,7 +7,7 @@ Python/C++ используется pybind11, а сборкой управляю
 
 ## Окружение
 
-Проект рассчитан на Python 3.12 и `uv`.
+Проект рассчитан на Python `>=3.12` и `uv`.
 
 ```powershell
 uv sync --extra experiments --extra dev
