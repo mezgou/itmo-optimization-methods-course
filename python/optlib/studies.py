@@ -1,4 +1,4 @@
-"""Neural-network study helpers for Lab 4."""
+"""Neural-network study helpers for optimizer/model comparisons."""
 
 from __future__ import annotations
 

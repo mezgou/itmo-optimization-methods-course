@@ -1,4 +1,4 @@
-"""Objective registry used by Lab 2 experiments."""
+"""Objective registry used by benchmark experiments."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def _as_float_array(values: np.ndarray) -> np.ndarray:
 
 
 def list_objectives() -> list[str]:
-    """Return objective names supported by the Lab 2 registry."""
+    """Return objective names supported by the benchmark registry."""
 
     return [
         "rosenbrock",

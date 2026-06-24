@@ -1,4 +1,4 @@
-"""Dataset loading, preprocessing, and evaluation helpers for Labs 3-4."""
+"""Dataset loading, preprocessing, and evaluation helpers."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ class Standardizer:
 
 @dataclass(frozen=True)
 class PreparedDataset:
-    """Compatibility view used by Lab 3 tests and notebooks."""
+    """Compatibility view used by tests and notebooks."""
 
     train_features: np.ndarray
     train_targets: np.ndarray
@@ -430,7 +430,7 @@ def evaluate(
     path: str | Path,
     standardizer: Standardizer | None = None,
 ) -> dict[str, Any]:
-    """Evaluate a trained dataset model on a CSV path, including closed d3."""
+    """Evaluate a trained dataset model on a CSV path, including closed-set data."""
 
     if standardizer is None:
         return model.evaluate_path(path)

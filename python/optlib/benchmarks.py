@@ -1,4 +1,4 @@
-"""Public benchmark harness helpers for Lab 2 notebooks."""
+"""Public benchmark harness helpers for notebooks."""
 
 from __future__ import annotations
 

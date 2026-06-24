@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+from pathlib import Path
 import sys
 from types import SimpleNamespace
-from pathlib import Path
 
 import numpy as np
 
 import optlib
 
 ROOT = Path(__file__).resolve().parents[2]
+FIRST_DATASET = ROOT / "data" / "first_dataset.csv"
+SECOND_DATASET = ROOT / "data" / "second_dataset.csv"
 
 
-def test_load_and_split_dataset() -> None:
-    features, targets = optlib.load_csv(ROOT / "data" / "first_dataset.csv")
+def test_load_csv_split_and_standardize_first_dataset() -> None:
+    features, targets = optlib.load_csv(FIRST_DATASET)
     assert features.shape == (600, 2)
     assert targets.shape == (600,)
 
@@ -25,13 +27,13 @@ def test_load_and_split_dataset() -> None:
     standardizer = optlib.fit_standardizer(x_train)
     assert np.allclose(np.mean(standardizer.transform(x_train), axis=0), 0.0, atol=1e-12)
 
-    split = optlib.prepare_dataset(ROOT / "data" / "first_dataset.csv", seed=123)
+    split = optlib.prepare_dataset(FIRST_DATASET, seed=123)
     assert split.train_features.shape == (480, 2)
     assert split.test_features.shape == (120, 2)
     assert np.allclose(np.mean(split.train_features, axis=0), 0.0, atol=1e-12)
 
 
-def test_classification_metrics() -> None:
+def test_classification_metrics_return_binary_confusion_matrix() -> None:
     metrics = optlib.classification_metrics(
         np.array([0, 1, 1, 0]),
         np.array([0, 1, 0, 0]),
@@ -63,9 +65,9 @@ def test_download_uses_gdown(monkeypatch, tmp_path: Path) -> None:
     assert calls == {"id": "file-id", "output": str(destination), "quiet": "False"}
 
 
-def test_train_binary_classifier_on_first_dataset() -> None:
+def test_train_binary_classifier_scores_first_dataset() -> None:
     model, split, metrics = optlib.train_binary_classifier(
-        ROOT / "data" / "first_dataset.csv",
+        FIRST_DATASET,
         method="adam",
         hidden_dim=8,
         learning_rate=0.03,
@@ -73,13 +75,13 @@ def test_train_binary_classifier_on_first_dataset() -> None:
         seed=9,
     )
     assert metrics["f1"] > 0.8
-    evaluated = optlib.evaluate(model, ROOT / "data" / "first_dataset.csv", split.standardizer)
+    evaluated = optlib.evaluate(model, FIRST_DATASET, split.standardizer)
     assert evaluated["f1"] > 0.8
 
 
 def test_binary_dataset_model_save_load(tmp_path: Path) -> None:
     model, _, metrics = optlib.train_binary_classifier(
-        ROOT / "data" / "first_dataset.csv",
+        FIRST_DATASET,
         method="adam",
         hidden_dim=8,
         learning_rate=0.03,
@@ -90,8 +92,8 @@ def test_binary_dataset_model_save_load(tmp_path: Path) -> None:
 
     path = model.save(tmp_path / "model.npz")
     loaded = optlib.load_binary_dataset_model(path)
-    evaluated = loaded.evaluate_path(ROOT / "data" / "first_dataset.csv")
-    evaluated_from_path = optlib.evaluate_saved_model(path, ROOT / "data" / "first_dataset.csv")
+    evaluated = loaded.evaluate_path(FIRST_DATASET)
+    evaluated_from_path = optlib.evaluate_saved_model(path, FIRST_DATASET)
 
     assert evaluated["f1"] > 0.8
     assert evaluated_from_path["f1"] > 0.8
@@ -101,9 +103,9 @@ def test_binary_dataset_model_save_load(tmp_path: Path) -> None:
     assert suffixless_path.exists()
 
 
-def test_train_binary_classifier_on_second_dataset() -> None:
+def test_train_binary_classifier_scores_second_dataset() -> None:
     _, _, metrics = optlib.train_binary_classifier(
-        ROOT / "data" / "second_dataset.csv",
+        SECOND_DATASET,
         method="adam",
         hidden_dim=12,
         learning_rate=0.03,

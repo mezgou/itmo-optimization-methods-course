@@ -1,4 +1,4 @@
-"""Small reproducible harness for Lab 2 optimizer comparisons."""
+"""Small reproducible harness for optimizer comparisons."""
 
 from __future__ import annotations
 

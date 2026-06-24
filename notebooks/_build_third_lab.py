@@ -26,9 +26,9 @@ def code(text: str) -> None:
 # ---------------------------------------------------------------- title
 md(
     r"""
-# Лабораторная работа №3: базовая нейросеть и достижение порога качества
+# Отчет 3: базовая MLP и качество на CSV-данных
 
-Цель: обучить собственный MLP на d1/d2, сравнить Adam и Heavy-Ball, показать
+Обучаем собственную C++ MLP на d1/d2, сравниваем Adam и Heavy-Ball, показываем
 метрики, кривые, матрицы ошибок, границы решений и итоговый F1-блок для d3
 """
 )
@@ -444,7 +444,7 @@ md(
 Формула зачётной метрики:
 
 $$
-\operatorname{score}=0.3F_1(d_1)+0.3F_1(d_2)+0.4F_1(d_3)
+score = 0.3 F_1(d_1) + 0.3 F_1(d_2) + 0.4 F_1(d_3)
 $$
 
 Порог: `0.55`. Сейчас считается d1+d2; на защите достаточно задать `D3_PATH`
@@ -486,7 +486,7 @@ if score["missing"]:
 
 # Сохраняем и сразу проверяем live evaluate для совместимого d3-сценария.
 Path("artifacts").mkdir(exist_ok=True)
-model_path = datasets.train_binary_dataset(D1, **BEST).model.save("artifacts/lab3_model_d1.npz")
+model_path = datasets.train_binary_dataset(D1, **BEST).model.save("artifacts/d1_model.npz")
 loaded = datasets.load_binary_dataset_model(model_path)
 check = loaded.evaluate_path(D1)
 print(f"Сохранённая модель: {model_path}; self-check на d1 F1={check['f1']:.4f}")
